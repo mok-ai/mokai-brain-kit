@@ -1,0 +1,10 @@
+{
+  "role": "HUB",
+  "read_key": "CHANGE-ME-INSTALL-TIME",
+  "share_port": 9211,
+  "vault_dir": "C:/main_ai/obsidian",
+  "blocked_divisions": ["ACCOUNTING", "FINANCE", "CUSTOMER", "HR"],
+  "blocked_tag_patterns": ["회계", "세무", "손익", "고객명단", "미수금", "매매", "백테스트"],
+  "blocked_keyword_patterns": ["api_key", "secret", "비밀번호", "인증서", "token", "passwd"],
+  "allowed_collections": ["wiki", "knowledge", "decisions", "conversations", "tasks"]
+}
