@@ -70,8 +70,10 @@ def make_app(config: BrainShareConfig, sink_fn, seen_ids_loader):
         key = (data.get("key", "") or "").encode("utf-8")
         items = data.get("items", []) or []
 
-        # Path-traversal guard: reject if node_id is malformed
-        if node_id and not _NODE_ID_RE.fullmatch(node_id):
+        # Path-traversal guard: reject malformed or empty node_id (empty would
+        # land items at incoming/<id>.json instead of incoming/<node>/<id>.json,
+        # breaking per-leaf isolation).
+        if not node_id or not _NODE_ID_RE.fullmatch(node_id):
             log.warning("invalid node_id rejected=%s", node_id)
             start_response("400 Bad Request", [("Content-Type","text/plain")])
             return [b'{"error":"invalid node_id"}']

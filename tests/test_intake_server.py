@@ -95,6 +95,18 @@ def test_http_intake_rejects_path_traversal_node_id():
     assert sunk == []  # sink never called
 
 
+def test_http_intake_rejects_empty_node_id():
+    """Empty node_id would create incoming/<id>.json at the root, breaking
+    per-leaf isolation. Must be rejected with 400, sink never called."""
+    from brain_share.intake_server import make_app
+    sunk = []
+    app = make_app(cfg(), lambda n,i: sunk.append(i["id"]), lambda: set())
+    body = json.dumps({"node_id":"","key":"k","items":[it("a")]}).encode()
+    status, resp = _call(app, body)
+    assert status.startswith("400")
+    assert sunk == []
+
+
 def test_process_batch_rejects_invalid_item_id():
     """Item with id=../evil (path traversal) should be rejected, sink not called."""
     sunk = []
