@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-install_agent.py — Mokai Brain Kit 3.0.0 installer
+install.py — Mokai Brain Kit 3.0.1 installer
 DATA-PRESERVING: read + add only. Never deletes chroma_db, obsidian, or any existing content.
 """
 
@@ -8,31 +8,59 @@ import argparse
 import importlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).parent.resolve()
+VERSION = "3.0.1"
 
-print("Mokai Brain Kit 3.0.0")
+# ─────────────────────────────────────────────
+# Force UTF-8 stdout/stderr (avoid cp949 crash on em-dash, korean banners)
+# ─────────────────────────────────────────────
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if _stream is not None and hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+HERE = Path(__file__).parent.resolve()
 
 # ─────────────────────────────────────────────
 # Args
 # ─────────────────────────────────────────────
-parser = argparse.ArgumentParser(description="Mokai Brain Kit installer")
-parser.add_argument("--root", default=r"C:\brainkit\memory", help="Agent memory root (default: C:\\agent\\memory)")
+parser = argparse.ArgumentParser(
+    description=f"Mokai Brain Kit {VERSION} installer",
+    epilog="TIP: in bash, use forward slashes: --root C:/agent/memory",
+)
+parser.add_argument(
+    "--root",
+    default=r"C:\brainkit\memory",
+    help=r"Agent memory root (default: C:\brainkit\memory). bash users: use forward slashes.",
+)
 args = parser.parse_args()
 
-ROOT = Path(args.root)
+# Validate --root: reject malformed paths like "C:epikxmemory" (drive letter without separator)
+# which happens when bash silently strips backslashes
+root_str = args.root
+if re.match(r"^[A-Za-z]:[^\\/]", root_str):
+    print(f"ERROR: --root '{root_str}' looks malformed (drive letter without path separator).")
+    print("If you're running this from bash, backslashes were stripped. Use forward slashes instead:")
+    print(f"   python install.py --root C:/agent/memory")
+    sys.exit(2)
+
+ROOT = Path(root_str).resolve()
+
 print(f"\n{'='*60}")
-print(f"Mokai Brain Kit 3.0.0 INSTALLER")
+print(f"Mokai Brain Kit {VERSION} INSTALLER")
 print(f"Memory root: {ROOT}")
 print(f"{'='*60}\n")
 
 # ─────────────────────────────────────────────
-# Step 6 first: Baseline preservation snapshot
+# Step 0: Baseline preservation snapshot
 # ─────────────────────────────────────────────
 print("[0] Baseline snapshot (before install)")
 chroma_dir = ROOT / "chroma_db"
@@ -63,7 +91,7 @@ for f in src_bs.glob("*.py"):
     shutil.copy2(f, dst_f)
     copied_bs += 1
     print(f"    + {f.name}")
-print(f"    → {copied_bs} module(s) copied to {dst_bs}")
+print(f"    -> {copied_bs} module(s) copied to {dst_bs}")
 print()
 
 # ─────────────────────────────────────────────
@@ -78,14 +106,14 @@ copied_tests = 0
 for f in src_tests.glob("*.py"):
     shutil.copy2(f, dst_tests / f.name)
     copied_tests += 1
-print(f"    → {copied_tests} test file(s) copied to {dst_tests}")
+print(f"    -> {copied_tests} test file(s) copied to {dst_tests}")
 print()
 
 # ─────────────────────────────────────────────
-# Step 3: pip install dependencies
+# Step 3: pip install dependencies (now includes pytest)
 # ─────────────────────────────────────────────
 print("[3] Checking / installing pip dependencies...")
-DEPS = ["numpy", "scikit-learn", "pyyaml", "mcp"]
+DEPS = ["numpy", "scikit-learn", "pyyaml", "mcp", "pytest"]
 
 for pkg in DEPS:
     try:
@@ -104,45 +132,67 @@ for pkg in DEPS:
 print()
 
 # ─────────────────────────────────────────────
-# Step 4: Patch memory_config.py — add wiki collection
+# Step 4: Patch memory_config.py — add wiki collection (format-detecting)
 # ─────────────────────────────────────────────
 print("[4] Patching memory_config.py (wiki collection)...")
 mem_cfg = ROOT / "memory_config.py"
 mem_cfg_bak = ROOT / "memory_config.py.bak"
 
 if mem_cfg.exists():
-    # Backup only if .bak absent
     if not mem_cfg_bak.exists():
         shutil.copy2(mem_cfg, mem_cfg_bak)
-        print(f"    Backed up → {mem_cfg_bak}")
+        print(f"    Backed up -> {mem_cfg_bak}")
     else:
         print(f"    Backup already exists, skipping: {mem_cfg_bak}")
 
     content = mem_cfg.read_text(encoding="utf-8")
 
-    WIKI_LINE = '    "wiki":          f"{AGENT_NAME}_wiki",  # LLM wiki\n'
-
     if '"wiki"' in content:
         print("    [skip] 'wiki' collection already present")
-    elif '"knowledge"' in content:
-        content = content.replace(
-            '"knowledge"',
-            WIKI_LINE + '    "knowledge"',
-            1
-        )
-        mem_cfg.write_text(content, encoding="utf-8")
-        print("    [OK] Inserted wiki collection before 'knowledge'")
     else:
-        print("    [warn] Could not find 'knowledge' line — wiki NOT inserted. Please add manually.")
+        # Format detection: clone the existing "knowledge" entry's value expression
+        # and substitute knowledge -> wiki.  Supports literal ("kim_knowledge"),
+        # f-string (f"{AGENT_NAME}_knowledge"), and other expressions uniformly.
+        m = re.search(
+            r'(?P<indent>^[ \t]*)"knowledge"\s*:\s*(?P<value>[^,\n]+?),?(?P<comment>[ \t]*(?:#[^\n]*)?)\n',
+            content,
+            re.MULTILINE,
+        )
+        if m:
+            indent = m.group("indent")
+            knowledge_value = m.group("value").strip()
+            # Replace 'knowledge' inside the value expression with 'wiki'
+            # (works for both "X_knowledge" literal and f"{AGENT_NAME}_knowledge")
+            if "knowledge" in knowledge_value:
+                wiki_value = knowledge_value.replace("knowledge", "wiki")
+            else:
+                # value doesn't contain 'knowledge' substring -> safest guess: append _wiki
+                wiki_value = f'"{knowledge_value.strip()}_wiki"'  # fallback (rare)
+
+            wiki_line = f'{indent}"wiki": {wiki_value},  # LLM wiki\n'
+            # Insert before knowledge line
+            content_new = content[: m.start()] + wiki_line + content[m.start() :]
+            mem_cfg.write_text(content_new, encoding="utf-8")
+            print(f"    [OK] Inserted wiki collection (format-matched): {wiki_value}")
+        else:
+            print("    [warn] Could not find 'knowledge' entry — wiki NOT inserted. Add manually:")
+            print('           "wiki": "<your_prefix>_wiki",')
 else:
     print(f"    [skip] {mem_cfg} not found — no patch needed")
 print()
 
 # ─────────────────────────────────────────────
-# Step 5: Create brain_share_config.json if absent
+# Step 5: Create brain_share_config.json if absent (ROOT-derived vault_dir)
 # ─────────────────────────────────────────────
 print("[5] Checking brain_share_config.json...")
 cfg_json = ROOT / "brain_share_config.json"
+
+# Heuristic vault_dir:  <ROOT_parent>/obsidian  if ROOT is named "memory"
+#                       else ROOT/obsidian
+if ROOT.name.lower() == "memory":
+    default_vault = ROOT.parent / "obsidian"
+else:
+    default_vault = ROOT / "obsidian"
 
 if cfg_json.exists():
     print(f"    [skip] Already exists: {cfg_json}")
@@ -152,7 +202,7 @@ else:
         "role": "HUB",
         "read_key": read_key,
         "share_port": 9211,
-        "vault_dir": r"C:\brainkit\obsidian",
+        "vault_dir": str(default_vault),
         "allowed_collections": [
             "wiki",
             "knowledge",
@@ -171,11 +221,16 @@ else:
     cfg_json.write_text(json.dumps(config_data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"    [OK] Created: {cfg_json}")
     print(f"    *** Generated read_key: {read_key} ***")
-    print(f"    NOTE: blocked_divisions is empty — fill it after measuring your RAG divisions (see README)")
+    print(f"    vault_dir defaulted to: {default_vault}")
+    print()
+    print(f"    !!! SECURITY WARNING: blocked_divisions = [] (no division filter)")
+    print(f"    !!! Before starting the gateway, measure your RAG divisions and")
+    print(f"    !!! fill blocked_divisions with sensitive ones (accounting, customer,")
+    print(f"    !!! secret, trading, etc.). See README.md step 3.")
 print()
 
 # ─────────────────────────────────────────────
-# Step 6b: Post-install baseline check
+# Step 6: Post-install baseline check
 # ─────────────────────────────────────────────
 print("[6] Post-install baseline verification (data preservation check)...")
 chroma_count_after = 0
@@ -185,8 +240,8 @@ obsidian_count_after = 0
 if obsidian_dir.exists():
     obsidian_count_after = sum(1 for _ in obsidian_dir.rglob("*.md"))
 
-print(f"    chroma_db files : {chroma_count} → {chroma_count_after}  ({'OK unchanged' if chroma_count == chroma_count_after else 'CHANGED — investigate'})")
-print(f"    obsidian .md    : {obsidian_count} → {obsidian_count_after}  ({'OK unchanged' if obsidian_count == obsidian_count_after else 'CHANGED — investigate'})")
+print(f"    chroma_db files : {chroma_count} -> {chroma_count_after}  ({'OK unchanged' if chroma_count == chroma_count_after else 'CHANGED — investigate'})")
+print(f"    obsidian .md    : {obsidian_count} -> {obsidian_count_after}  ({'OK unchanged' if obsidian_count == obsidian_count_after else 'CHANGED — investigate'})")
 print()
 
 # ─────────────────────────────────────────────
@@ -236,10 +291,8 @@ result = subprocess.run(
     [sys.executable, "-m", "pytest", test_dir, "-q", "--tb=short"],
     capture_output=True, text=True
 )
-# Print last few lines (summary)
 output = (result.stdout + result.stderr).strip()
 lines = output.splitlines()
-# Print last 10 lines as summary
 for line in lines[-10:]:
     print(f"    {line}")
 print()
@@ -248,7 +301,7 @@ print()
 # Final
 # ─────────────────────────────────────────────
 print("=" * 60)
-print("INSTALL COMPLETE — data preserved (chroma/obsidian untouched).")
+print(f"Mokai Brain Kit {VERSION} INSTALL COMPLETE — data preserved (chroma/obsidian untouched).")
 print("Gateway NOT auto-started; see README.md.")
 print(f"brain_share modules : {copied_bs}")
 print(f"test files          : {copied_tests}")

@@ -9,6 +9,7 @@ memory_manager module before calling make_backends().
 
 import os
 import sys
+from pathlib import Path
 
 from brain_share.wiki_store import WikiStore
 from brain_share.sensitivity_filter import filter_results
@@ -52,7 +53,18 @@ def make_backends(config):
     (wiki_search, rag_search, related_fn)
     """
     # Resolve path to the memory module directory.
-    memory_path = os.environ.get("MEMORY_PATH", "C:/main_ai/memory")
+    # No hardcoded default — must be set explicitly via MEMORY_PATH env or
+    # auto-derived from the config file's parent directory.
+    memory_path = os.environ.get("MEMORY_PATH")
+    if not memory_path:
+        cfg_path = getattr(config, "_source_path", None) or getattr(config, "source_path", None)
+        if cfg_path:
+            memory_path = str(Path(cfg_path).resolve().parent)
+    if not memory_path:
+        raise RuntimeError(
+            "MEMORY_PATH not set. Either export MEMORY_PATH=<agent_memory_root> "
+            "or run the gateway from the directory that holds memory_manager.py."
+        )
     if memory_path not in sys.path:
         sys.path.insert(0, memory_path)
 

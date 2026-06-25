@@ -44,6 +44,8 @@ def cfg(tmp_path):
         blocked_divisions=["ACCT"],
         allowed_collections=["wiki", "knowledge"],
         vault_dir=str(tmp_path),
+        # source_path lets mm_adapter derive MEMORY_PATH without env var.
+        source_path=str(tmp_path / "brain_share_config.json"),
     )
 
 

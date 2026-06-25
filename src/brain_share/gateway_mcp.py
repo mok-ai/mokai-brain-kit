@@ -1,6 +1,6 @@
 # brain_share/gateway_mcp.py
 # 실행: python -m brain_share.gateway_mcp --config brain_share_config.json
-import argparse, logging
+import argparse, logging, os
 from mcp.server.fastmcp import FastMCP
 from brain_share.config import load_config
 from brain_share.gateway_core import check_key, resolve_query, resolve_related
@@ -12,7 +12,9 @@ log = logging.getLogger("brain_share")
 def build_server(config, wiki_search, rag_search, related_fn, graph_store=None):
     logging.basicConfig(filename="brain_share_access.log", level=logging.INFO,
                         format="%(asctime)s %(message)s", encoding="utf-8")
-    mcp = FastMCP("company-brain", host="0.0.0.0", port=config.share_port)
+    # Default loopback only; set BRAIN_SHARE_HOST=0.0.0.0 to expose on LAN.
+    bind_host = os.environ.get("BRAIN_SHARE_HOST", "127.0.0.1")
+    mcp = FastMCP("company-brain", host=bind_host, port=config.share_port)
 
     def _auth(ctx):
         key = ""

@@ -11,6 +11,9 @@ class BrainShareConfig:
     blocked_keyword_patterns: list[str] = field(default_factory=list)
     allowed_collections: list[str] = field(default_factory=list)
     vault_dir: str = ""
+    # Path of the JSON file load_config() read from. Used by mm_adapter to
+    # derive MEMORY_PATH when the env var isn't set.
+    source_path: str = ""
 
 def load_config(path: str) -> BrainShareConfig:
     with open(path, "r", encoding="utf-8") as f:
@@ -28,4 +31,5 @@ def load_config(path: str) -> BrainShareConfig:
         blocked_keyword_patterns=list(d.get("blocked_keyword_patterns", [])),
         allowed_collections=list(d.get("allowed_collections", [])),
         vault_dir=d.get("vault_dir", ""),
+        source_path=str(path),
     )
