@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-install.py — Mokai Brain Kit 3.1.0 installer
+install.py — Mokai Brain Kit 3.1.1 installer
 DATA-PRESERVING: read + add only. Never deletes chroma_db, obsidian, or any existing content.
 """
 
@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSION = "3.0.1"
+VERSION = "3.1.1"
 
 # ─────────────────────────────────────────────
 # Force UTF-8 stdout/stderr (avoid cp949 crash on em-dash, korean banners)
@@ -40,6 +40,13 @@ parser.add_argument(
     "--root",
     default=r"C:\brainkit\memory",
     help=r"Agent memory root (default: C:\brainkit\memory). bash users: use forward slashes.",
+)
+parser.add_argument(
+    "--main-host",
+    default=None,
+    help="Main brain LAN IP or domain (e.g. 192.168.0.10 or brain.company.kr). "
+         "Used in LEAF_REGISTRATION.md. If omitted, $BRAIN_MAIN_HOST env or a "
+         "placeholder is used (must be edited by operator before sharing).",
 )
 args = parser.parse_args()
 
@@ -227,6 +234,35 @@ else:
     print(f"    !!! Before starting the gateway, measure your RAG divisions and")
     print(f"    !!! fill blocked_divisions with sensitive ones (accounting, customer,")
     print(f"    !!! secret, trading, etc.). See README.md step 3.")
+print()
+
+# ─────────────────────────────────────────────
+# Step 5b: Emit LEAF_REGISTRATION.md (copy-paste sub-PC join commands)
+# ─────────────────────────────────────────────
+print("[5b] Writing LEAF_REGISTRATION.md (sub-PC join commands)...")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+try:
+    from brain_share.leaf_registration import emit_leaf_registration  # noqa: PLC0415
+
+    cfg_data = json.loads(cfg_json.read_text(encoding="utf-8"))
+    current_read_key = cfg_data.get("read_key", "<MISSING>")
+    main_host = args.main_host or os.environ.get("BRAIN_MAIN_HOST")
+
+    reg_md_existed = (ROOT / "LEAF_REGISTRATION.md").exists()
+    reg_md = emit_leaf_registration(
+        ROOT, read_key=current_read_key, main_host=main_host, version=VERSION)
+    if reg_md_existed:
+        print(f"    [skip] Already exists: {reg_md} (delete to regenerate)")
+    else:
+        print(f"    [OK] Created: {reg_md}")
+        if not main_host:
+            print(f"    NOTE: main_host placeholder used — edit '{reg_md.name}' or rerun with --main-host=<IP>")
+        print(f"    TIP: 운영자가 '하위 등록 명령 알려줘' 라고 물으면 이 파일을 보여드리도록")
+        print(f"         CLAUDE.md 끝에 다음 한 줄 추가:")
+        print(f'         "사용자가 \"하위 등록 명령\", \"leaf 등록\" 등을 물으면 {reg_md} 내용을 출력한다."')
+except Exception as e:
+    print(f"    [WARN] LEAF_REGISTRATION.md emission failed: {e}")
 print()
 
 # ─────────────────────────────────────────────

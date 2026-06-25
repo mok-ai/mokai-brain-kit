@@ -4,6 +4,18 @@
 
 ---
 
+## [3.1.1] - 2026-06-25
+
+### 추가
+- **`brain_share/leaf_registration.py`**: 메인 설치 직후 `LEAF_REGISTRATION.md`를 자동 생성. 안에는 새 하위 PC 등록에 필요한 4단계(패키지 설치 / MCP 등록 / 환경변수 / sync_agent 부팅등록) 명령이 메인의 실제 `read_key`와 함께 그대로 박혀 있어 복붙 한 번으로 끝남. 멱등 — 이미 있으면 read_key 재발급 0.
+- **`install.py --main-host` 옵션**: 메인 IP/도메인을 LEAF_REGISTRATION.md에 박을 값. 미지정 시 `$BRAIN_MAIN_HOST` env 사용, 그것도 없으면 `<MAIN_HOST_IP_OR_DOMAIN>` 플레이스홀더(운영자가 1회 수정).
+- **UX**: 메인 설치 후 사장님이 "하위 등록 명령 알려줘"·"leaf 등록 어떻게 했더라"라고 물으면 메인 김비서가 이 파일을 보여드림(CLAUDE.md 한 줄 안내 추가). 신규 PC 합류 절차가 "메인에 물어보고 복붙"으로 단일화.
+
+### 검증
+- 4 신규 단위테스트(render 콘텐츠·idempotent·placeholder·디렉토리 자동 생성). 114 + 4 = **118/118** 통과.
+
+---
+
 ## [3.1.0] - 2026-06-25
 
 ### 추가 — 양방향 지식교환 완성 (하위→메인 업로드 파이프라인)
