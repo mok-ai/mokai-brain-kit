@@ -4,6 +4,30 @@
 
 ---
 
+## [3.1.0] - 2026-06-25
+
+### 추가 — 양방향 지식교환 완성 (하위→메인 업로드 파이프라인)
+- **`brain_share/intake_filter.py`**: 순수 검증 게이트(`validate_incoming`) — 민감 재검·중복·품질 3중 필터. 자동통합 파이프라인의 마지막 누설 방어선. `compute_item_id(node_id, content)`는 null-byte 구분자로 해싱(`a||bc` vs `ab||c` 충돌 회피).
+- **`brain_share/intake_server.py`**: 메인 수신 서버 `:9212` (읽기 게이트웨이 `:9211`과 별도 프로세스). 공용 읽기 키 + `node_id` 인증(`hmac.compare_digest`), 통과분만 `incoming/<node_id>/<id>.json` 저장 + 선택적 RAG 인덱싱. 기본 바인딩 `127.0.0.1`, LAN 노출은 `BRAIN_SHARE_INTAKE_HOST` env opt-in. `node_id`·`item.id` 경로횡단 차단(`[A-Za-z0-9_-]{1,64}` / `[A-Za-z0-9]{1,64}`).
+- **`brain_share/sync_agent.py`**: 하위 PC 상주 동기화 에이전트(가벼움, LLM/임베딩/chroma 의존 0). SQLite 큐(WAL), 결정적 `item.id = sha256(node_id+content)[:16]`, 짧은 주기 flush(기본 180초), 시작 캐치업, 오프라인 시 큐 보존(network/non-200/malformed body 모두 큐 유지).
+- **`brain_share/synth_daemon.py`**: 메인 주기 증분 정본화 데몬. `incoming/`를 topic별로 그룹핑하여 기존 `wiki_synth.synthesize_topic` 호출(claude/extractor 주입형). topic별 watermark로 신규분만 재합성. **LLM 빈 응답 시 watermark 미진전**(영구 토픽 손실 방어).
+
+### 검증
+- 4 신규 모듈 단위테스트 28건 + 종단테스트 2건. 79(기존) + 34(신규) = **113/113 통과**.
+- 종단테스트가 "민감 item 누설 0" 실측 — 차단된 항목 메인 디스크 비도달 검증(파일 카운트가 아닌 실내용 substring 스캔).
+- subagent-driven-development TDD로 6 Task 진행, 각 Task마다 sonnet 리뷰 + 발견 시 fix round. 리뷰가 잡은 핵심: (Task 2) `node_id`·`item.id` 경로횡단 + 시그니처 hmac.compare_digest, (Task 4) LLM 빈 응답 watermark 침묵 진전.
+
+### 사용
+```
+# 메인(24h HUB)
+python -m brain_share.intake_server --config brain_share_config.json --incoming C:/main_brain/incoming &
+# 하위(자주 꺼지는 PC)
+python -c "from brain_share.sync_agent import SyncAgent, SyncQueue; ..."
+```
+세부는 README §6 참고.
+
+---
+
 ## [3.0.1] - 2026-06-25
 
 ### 수정 (epikx 실설치에서 발견된 6대 버그)
