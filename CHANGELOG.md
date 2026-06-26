@@ -4,6 +4,24 @@
 
 ---
 
+## [3.1.2] - 2026-06-26
+
+### 추가
+- **`brain_share/selfsynth_batch.py`**: 에이전트의 자체 RAG 메모리(예: `<agent>_knowledge`)를 정본 위키로 합성하여 `<agent>_wiki` 컬렉션에 실적재하는 주기 batch. NoOpIndexer 대신 임베딩 주입형 `_WikiIndexer`로 통합검색 노출 가능.
+  - `cluster_topics(emb, over_k, merge_threshold)` — over-cluster(KMeans) + 코사인 병합(Agglomerative) 자동 k.
+  - `pick_representatives(emb, labels, topic, k)` — 토픽 중심에 가까운 청크 k개.
+  - `run_selfsynth(source_collection, wiki_collection, vault_dir, embed_fn, llm_synth_fn, extractor_fn, graph_db_path, …)` — 1회 pass. 무거운 의존(chroma 컬렉션 객체·임베더·claude·extractor) 전부 주입형 → GPU/네트워크 없이 결정적 단위테스트.
+  - 빈 LLM body 보호(synth_daemon과 동일 패턴): `wiki_store.upsert`가 `""` 반환 시 그 토픽 wikis_made/wiki_count에 안 잡힘. 다음 pass에서 재시도.
+
+### 검증
+- 8 신규 단위테스트(separates clusters / empty / single / reps / writes vault+collection / empty source / empty LLM body). 118+8 = **126/126** 통과.
+- **김비서 실가동 검증** (2026-06-26): kim_knowledge 5396건 → 9 토픽 → 8 정본위키 합성·kim_wiki 컬렉션 8건 실적재·관계그래프 48노드 473엣지. chroma 직접쿼리 정확 매칭 입증("조이듀 운영" distance 0.17, "Worker API 함정" 0.13). 김비서 본체 주간 cron(매주 월 03:00) 등록.
+
+### 알려진 한계
+- 김비서 RAG :9210 검색 API에서는 wiki 결과 비노출 — 김비서 본체 리랭커/hybrid 튜닝 별개 이슈(`feedback_kim_rag_wiki_collection_invisible.md`). brain_share `selfsynth_batch` 모듈 자체와는 무관. 다른 에이전트의 RAG 구성이 다르면 그대로 노출됨.
+
+---
+
 ## [3.1.1] - 2026-06-25
 
 ### 추가
