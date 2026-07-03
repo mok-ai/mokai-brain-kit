@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-memory_mcp.py — 스머프 장기기억 MCP 서버 (로컬 Claude용 "출입구")
+memory_mcp.py — 로컬 장기기억 MCP 서버 (로컬 Claude용 "출입구")
 
 기존 저장소를 그대로 사용한다 — 새 저장소를 만들지 않는다.
 로컬 RAG 서버(127.0.0.1:9210, chroma_db)에 HTTP로 읽고/쓴다.
@@ -11,8 +11,11 @@ memory_mcp.py — 스머프 장기기억 MCP 서버 (로컬 Claude용 "출입구
   save_memory(content, tags="", division="GENERAL", role="assistant")
                                                  → 새 기억을 RAG에 저장
 
-등록(로컬 Claude, c:\\smurfs 에서):
-  claude mcp add smurfs-memory -- py C:/smurfs/memory_mcp.py
+등록(로컬 Claude Code 터미널에서):
+  claude mcp add ${AGENT_NAME:-brain}-memory -- py C:/brainkit/memory_mcp.py
+
+MCP 서버 이름은 AGENT_NAME 환경변수를 기반으로 자동 설정된다.
+setup_identity.py 로 AGENT_NAME 을 지정했다면 그 이름이 접두어로 붙는다.
 
 의존성:  py -m pip install mcp
 """
@@ -32,12 +35,15 @@ SEARCH_PATH = os.environ.get("RAG_SEARCH_PATH", "/memory/search")   # 확인됨 
 # 저장 엔드포인트 — memory_api.py 의 통합 저장 라우트(실측 확정 ✔).
 #   POST /memory/store  body: {"type": conversation|decision|task|knowledge, "content": ..., ...}
 #   서버가 type 별로 store_conversation/store_decision/store_task/store_knowledge 로 분기하며
-#   기존 chroma_db·컬렉션(kim_*)을 그대로 사용한다. 새 저장소를 만들지 않는다.
+#   기존 chroma_db·컬렉션(<agent>_*)을 그대로 사용한다. 새 저장소를 만들지 않는다.
 SAVE_PATH = os.environ.get("RAG_SAVE_PATH", "/memory/store")
 # 기본 저장 유형 — knowledge(지식/요약, 365일 보존)로 장기기억화. decision(영구)도 가능.
 DEFAULT_MEM_TYPE = os.environ.get("RAG_MEM_TYPE", "knowledge")
+# MCP 서버 이름 — AGENT_NAME 환경변수 기반. brain-memory 는 fallback.
+AGENT_NAME = os.environ.get("AGENT_NAME", "brain").strip() or "brain"
+MCP_NAME = os.environ.get("MEMORY_MCP_NAME", f"{AGENT_NAME}-memory")
 
-mcp = FastMCP("smurfs-memory")
+mcp = FastMCP(MCP_NAME)
 
 
 def _post(path: str, payload: dict, timeout: float = 30.0) -> dict:
@@ -142,7 +148,7 @@ def save_memory(content: str, mem_type: str = DEFAULT_MEM_TYPE, title: str = "",
             "type": "knowledge",
             "topic": title or content.strip()[:50],
             "content": content,
-            "source": "smurfs-memory-mcp",
+            "source": f"{MCP_NAME}-mcp",
             "division": division,
         }
 
@@ -166,5 +172,5 @@ def save_memory(content: str, mem_type: str = DEFAULT_MEM_TYPE, title: str = "",
 
 
 if __name__ == "__main__":
-    print("smurfs-memory MCP up (stdio). RAG_BASE=" + RAG_BASE, file=sys.stderr)
+    print(f"{MCP_NAME} MCP up (stdio). RAG_BASE={RAG_BASE}", file=sys.stderr)
     mcp.run()

@@ -12,9 +12,9 @@ setup_obsidian.py — 옵시디언 볼트 생성 + brain_share 연결
 기존 데이터(chroma_db/기존 .md)는 절대 삭제·수정하지 않음. 추가만 함.
 
 사용:
-  py setup_obsidian.py --root C:/smurfs/memory
-  py setup_obsidian.py --root C:/smurfs/memory --seed          # RAG 기억으로 채우기
-  py setup_obsidian.py --root C:/smurfs/memory --vault C:/smurfs/obsidian --seed
+  py setup_obsidian.py --root C:/brainkit/memory
+  py setup_obsidian.py --root C:/brainkit/memory --seed          # RAG 기억으로 채우기
+  py setup_obsidian.py --root C:/brainkit/memory --vault C:/brainkit/obsidian --seed
 """
 
 import argparse
@@ -54,7 +54,7 @@ def safe_name(s, maxlen=60):
 
 def main():
     ap = argparse.ArgumentParser(description="옵시디언 볼트 생성 + brain_share 연결")
-    ap.add_argument("--root", default=r"C:\smurfs\memory", help="메모리 루트 (bash면 슬래시)")
+    ap.add_argument("--root", default=r"C:\brainkit\memory", help="메모리 루트 (bash면 슬래시)")
     ap.add_argument("--vault", default=None, help="볼트 경로 강제 지정 (기본: config vault_dir 또는 <root상위>/obsidian)")
     ap.add_argument("--seed", action="store_true", help="RAG 기억을 브라우징 노트로 채움 (읽기 전용)")
     ap.add_argument("--rag-port", type=int, default=9210)
