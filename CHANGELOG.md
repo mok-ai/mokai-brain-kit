@@ -4,6 +4,30 @@
 
 ---
 
+## [3.2.0] - 2026-07-03
+
+### 추가 — 3가지 설치 후 유틸리티 (외부 기여)
+GitHub PR #1 병합. 다른 에이전트가 자체 설치 과정에서 만든 실용 도구 3종을 브레인 키트 표준으로 편입.
+
+- **`healthcheck.py`** — 로컬 장기기억 종합 진단기(읽기 전용, 무손상). 6영역 점검: (1) 메모리 루트 / chroma_db / 옵시디언 볼트 (2) memory_config.py wiki 패치 (3) brain_share 모듈 + brain_share_config.json (read_key / blocked_divisions) (4) RAG :9210 + 공유 게이트웨이(:9211) 살아있음 (5) `~/.claude/skills` + `~/.claude/plugins` 설치 여부 (6) 런타임 도구(graphify / yt-dlp / serena-agent). FAIL/WARN/OK 요약 + exit code.
+- **`memory_mcp.py`** — 로컬 Claude 에서 자체 RAG(:9210)에 `recall_memory` / `save_memory` 두 도구를 노출하는 MCP 서버. **소유자 전용이라 민감정보 필터 없음**(정책 `personal-in-leaf-only`과 일치). memory_api 의 통합 `/memory/store` 라우트를 그대로 사용해 기존 컬렉션(`<agent>_*`) 유지. MCP 서버 이름은 `$AGENT_NAME` 기반(기본 `brain-memory`), `$MEMORY_MCP_NAME` env 로 명시 지정 가능.
+- **`setup_obsidian.py`** — 옵시디언 볼트 자동 생성(`.obsidian/app.json`) + `brain_share_config.json`의 `vault_dir` 자동 갱신(백업 후) + 선택적 `--seed` 로 RAG 기억을 `_RAG_스냅샷/` 폴더에 브라우징 노트로 스냅샷. 기존 `.md`·`chroma_db` 는 절대 삭제·수정 안 함.
+
+### 일반화
+편입 시 특정 에이전트 이름 하드코딩을 전량 제거하여 어떤 브레인 키트 설치에도 통용되도록 수정:
+- `memory_mcp.py` MCP 서버명·source 태그·stderr 배너 모두 `MCP_NAME` 변수로 통일 (`{AGENT_NAME}-memory` 파생).
+- `setup_obsidian.py` 기본 `--root` = `C:\brainkit\memory` (표준 위치).
+- `healthcheck.py` 이미 에이전트 무관하게 작성되어 있어 무변경.
+
+### 검증
+- 3파일 `py_compile` 통과.
+- brain_share 기존 126 테스트 회귀 0 (신규 3파일은 통합 스크립트라 pytest 커버리지 밖 — 브레인 키트 설치 실행 후 사용).
+
+### 위치
+zip 안 `mokai_brain_kit/` 최상위 (install.py / setup_identity.py 와 동급). 설치 후 필요 시 사용자가 수동 실행.
+
+---
+
 ## [3.1.2] - 2026-06-26
 
 ### 추가
