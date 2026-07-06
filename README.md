@@ -1,4 +1,4 @@
-# Mokai Brain Kit 3.2.1
+# Mokai Brain Kit 3.2.2
 
 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
@@ -287,4 +287,4 @@ a.run_forever(period_seconds=180,
 
 ---
 
-*Mokai Brain Kit 3.2.1 — agent brain_share upgrade package*
+*Mokai Brain Kit 3.2.2 — agent brain_share upgrade package*

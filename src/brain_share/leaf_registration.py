@@ -100,7 +100,7 @@ WshShell.Run "pythonw -m brain_share.sync_agent --config C:/leaf/memory/brain_sh
 
 
 def emit_leaf_registration(root, read_key: str, main_host: str = None,
-                           version: str = "3.2.1",
+                           version: str = "3.2.2",
                            today: str = None) -> Path:
     """Write LEAF_REGISTRATION.md under root, idempotent.
 

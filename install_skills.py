@@ -12,7 +12,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-print("Mokai Brain Kit 3.2.1")
+print("Mokai Brain Kit 3.2.2")
 
 
 def copy_skills(skills_src: Path, claude_home: Path) -> list[str]:

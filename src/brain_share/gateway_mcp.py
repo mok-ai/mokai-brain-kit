@@ -1,7 +1,7 @@
 # brain_share/gateway_mcp.py
 # 실행: python -m brain_share.gateway_mcp --config brain_share_config.json
 import argparse, logging, os
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 from brain_share.config import load_config
 from brain_share.gateway_core import check_key, resolve_query, resolve_related
 from brain_share.graph_gateway import graph_neighbors
@@ -25,7 +25,7 @@ def build_server(config, wiki_search, rag_search, related_fn, graph_store=None):
         return check_key(key, config)
 
     @mcp.tool()
-    def search_company_brain(query: str, top_k: int = 5, ctx=None) -> list:
+    def search_company_brain(query: str, top_k: int = 5, ctx: Context = None) -> list:
         if not _auth(ctx):
             return []
         rows = resolve_query(query, top_k, wiki_search, rag_search, config)
@@ -33,7 +33,7 @@ def build_server(config, wiki_search, rag_search, related_fn, graph_store=None):
         return rows
 
     @mcp.tool()
-    def get_company_context(query: str, ctx=None) -> str:
+    def get_company_context(query: str, ctx: Context = None) -> str:
         if not _auth(ctx):
             return ""
         rows = resolve_query(query, 5, wiki_search, rag_search, config)
@@ -41,7 +41,7 @@ def build_server(config, wiki_search, rag_search, related_fn, graph_store=None):
         return "\n\n".join(f"[{r['collection']}] {r['content']}" for r in rows)
 
     @mcp.tool()
-    def related_in_brain(entity: str, top_k: int = 10, ctx=None) -> list:
+    def related_in_brain(entity: str, top_k: int = 10, ctx: Context = None) -> list:
         if not _auth(ctx):
             return []
         rows = resolve_related(entity, top_k, related_fn, config)
@@ -49,7 +49,7 @@ def build_server(config, wiki_search, rag_search, related_fn, graph_store=None):
         return rows
 
     @mcp.tool()
-    def graph_neighbors_tool(keyword: str, top_k: int = 10, ctx=None) -> list:
+    def graph_neighbors_tool(keyword: str, top_k: int = 10, ctx: Context = None) -> list:
         if not _auth(ctx):
             return []
         if graph_store is None:

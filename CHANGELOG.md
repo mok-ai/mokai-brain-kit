@@ -4,6 +4,20 @@
 
 ---
 
+## [3.2.2] - 2026-07-06
+
+첫 라이브 MCP 클라이언트 접속(leaf 합류)에서 발견된 게이트웨이 인증 치명 버그 수정 (PATCH — 기능 추가 없음, 툴 API 무변경).
+
+### 수정
+- **`gateway_mcp.py` — MCP 툴 4종 Context 미주입으로 인증 상시 실패**: `search_company_brain` / `get_company_context` / `related_in_brain` / `graph_neighbors_tool`의 `ctx=None` 파라미터에 `Context` 타입 어노테이션이 없어 FastMCP가 요청 컨텍스트를 주입하지 않음 → `_auth()`가 `X-Brain-Key` 헤더를 읽지 못해 항상 인증 실패 → 모든 실제 MCP 클라이언트에 조용히 빈 결과만 반환되던 버그. `from mcp.server.fastmcp import FastMCP, Context` 임포트 + 4개 시그니처를 `ctx: Context = None`으로 수정. (기존 유닛테스트는 가짜 ctx를 함수에 직접 전달해 통과했기 때문에 라이브 주입 경로가 미커버였음.)
+
+### 검증
+- 신규 4 단위테스트 `test_gateway_mcp.py`: FastMCP 등록 메타데이터로 4개 툴 전부 `Tool.context_kwarg == "ctx"` 확인(어노테이션 누락 시 즉시 FAIL하는 회귀 방어) + 컨텍스트 부재 fail-closed + 정상 키 서빙 + 오류 키 거부. 버그 재현 상태에서 실제 FAIL함을 역검증.
+- 130+4 = **134/134 통과** (패키지·github src 양쪽 레이아웃).
+- 메인 HUB 라이브 게이트웨이(:9211)에 선적용 — 실제 leaf MCP 클라이언트에서 search 5건 정상 반환 실증.
+
+---
+
 ## [3.2.1] - 2026-07-06
 
 첫 실가동 leaf(OH PC) 설치에서 발견된 버그 3건 수정 (PATCH — 기능 추가 없음, 기존 API 무변경).
