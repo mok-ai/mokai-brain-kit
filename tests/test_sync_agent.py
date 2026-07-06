@@ -2,7 +2,7 @@ import json
 import sqlite3
 import pytest
 from brain_share.config import BrainShareConfig
-from brain_share.sync_agent import SyncQueue, SyncAgent
+from brain_share.sync_agent import SyncQueue, SyncAgent, iter_outbox, main
 
 
 def cfg():
@@ -93,3 +93,81 @@ def test_agent_does_not_import_heavy_modules():
     src = open(m.__file__, "r", encoding="utf-8").read()
     for forbidden in ("import numpy", "import chromadb", "import sentence_transformers"):
         assert forbidden not in src, f"sync_agent must not import {forbidden}"
+
+
+# ── CLI (outbox mode) — v3.2.1 ──────────────────────────────
+
+
+def test_iter_outbox_injects_collection_and_moves_to_sent(tmp_path):
+    """Items without "collection" would be rejected as sensitive by the HUB
+    intake filter — the outbox source must inject the default."""
+    outbox = tmp_path / "outbox"
+    outbox.mkdir()
+    (outbox / "a.json").write_text(
+        json.dumps({"content": "hello", "metadata": {"division": "SYSTEM"}}),
+        encoding="utf-8")
+    (outbox / "b.json").write_text(
+        json.dumps([{"content": "x", "collection": "decisions"},
+                    {"content": "y"}]), encoding="utf-8")
+    (outbox / "note.txt").write_text("ignored", encoding="utf-8")
+    items = list(iter_outbox(str(outbox), str(outbox / "sent")))
+    assert [(i["content"], i["collection"]) for i in items] == [
+        ("hello", "knowledge"), ("x", "decisions"), ("y", "knowledge")]
+    # parsed files moved, non-json untouched
+    assert not (outbox / "a.json").exists()
+    assert not (outbox / "b.json").exists()
+    assert (outbox / "sent" / "a.json").exists()
+    assert (outbox / "note.txt").exists()
+
+
+def test_iter_outbox_keeps_malformed_file_for_retry(tmp_path):
+    outbox = tmp_path / "outbox"
+    outbox.mkdir()
+    (outbox / "bad.json").write_text("{not json", encoding="utf-8")
+    items = list(iter_outbox(str(outbox), str(outbox / "sent")))
+    assert items == []
+    assert (outbox / "bad.json").exists()  # not silently discarded
+
+
+def _write_cfg(tmp_path):
+    cfg = tmp_path / "brain_share_config.json"
+    cfg.write_text(json.dumps({"role": "LEAF", "read_key": "k"}),
+                   encoding="utf-8")
+    return cfg
+
+
+def test_cli_once_uploads_outbox_items(tmp_path):
+    cfg = _write_cfg(tmp_path)
+    outbox = tmp_path / "outbox"
+    outbox.mkdir()
+    (outbox / "m.json").write_text(
+        json.dumps({"content": "from leaf"}), encoding="utf-8")
+    posted = []
+    def fake_post(url, body):
+        data = json.loads(body)
+        posted.append(data)
+        return (200, json.dumps({
+            "accepted": [i["id"] for i in data["items"]],
+            "rejected": []}).encode())
+    out = main(["--config", str(cfg), "--node", "leaf1",
+                "--intake", "http://x/intake", "--once"],
+               http_post=fake_post)
+    assert out["accepted"] == 1
+    assert posted[0]["node_id"] == "leaf1"
+    assert posted[0]["items"][0]["collection"] == "knowledge"
+    assert (outbox / "sent" / "m.json").exists()
+    # queue drained -> re-run is a no-op
+    out2 = main(["--config", str(cfg), "--node", "leaf1",
+                 "--intake", "http://x/intake", "--once"],
+                http_post=fake_post)
+    assert out2 == {"sent": 0, "accepted": 0, "rejected": 0}
+
+
+def test_cli_requires_node_and_intake(tmp_path, monkeypatch):
+    monkeypatch.delenv("AGENT_NAME", raising=False)
+    monkeypatch.delenv("BRAIN_INTAKE_URL", raising=False)
+    cfg = _write_cfg(tmp_path)
+    with pytest.raises(SystemExit):
+        main(["--config", str(cfg), "--once"])
+    with pytest.raises(SystemExit):
+        main(["--config", str(cfg), "--node", "leaf1", "--once"])

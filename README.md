@@ -1,4 +1,4 @@
-# Mokai Brain Kit 3.2.0 — Mokai Brain Kit 3.2.0
+# Mokai Brain Kit 3.2.1
 
 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
@@ -242,7 +242,17 @@ python -c "from brain_share.synth_daemon import run_daemon; ..."
 
 ### 하위(자주 꺼지는 PC)
 
-`SyncAgent`를 부팅 시 백그라운드 실행. 새 기억은 짧은 주기(180s) flush + 시작 시 캐치업으로 자동 업로드.
+가장 간단한 방법은 **CLI(3.2.1+, outbox 방식)**: 부팅 시 아래 명령을 백그라운드 실행하면 `<ROOT>/outbox/*.json` 에 떨군 아이템을 180초 주기로 메인에 업로드하고, 처리분은 `outbox/sent/` 로 이동한다 (오프라인 시 SQLite 큐 보존 + 재기동 캐치업).
+
+```bash
+# ROOT(= brain_share/ 폴더가 있는 메모리 루트)에서 실행해야 -m 임포트가 됨
+cd C:\brainkit\memory
+python -m brain_share.sync_agent --config C:\brainkit\memory\brain_share_config.json \
+    --node leaf1 --intake http://main-brain.lan:9212/intake
+# --node/--intake 는 AGENT_NAME / BRAIN_INTAKE_URL 환경변수로 대체 가능, 1회 실행은 --once
+```
+
+코드로 직접 붙일 땐 `SyncAgent`를 임베드:
 
 ```python
 from brain_share.config import load_config
@@ -256,6 +266,19 @@ a.run_forever(period_seconds=180,
               source_iter_factory=lambda: my_source())  # iterator over new items
 ```
 
+### 업로드 아이템 스키마 (어기면 intake가 전량 거부)
+
+```json
+{
+  "content": "본문 (필수, 비어있으면 거부)",
+  "collection": "knowledge",
+  "metadata": {"division": "SYSTEM", "tags": ["..."]}
+}
+```
+
+- **`collection` 필수** — 메인 intake 필터(`sensitivity_filter.is_blocked`)가 item의 `collection`을 allowed_collections(`wiki`/`knowledge`/`decisions`/`conversations`/`tasks`)와 대조한다. 필드가 없으면 빈 문자열로 취급되어 **무조건 "sensitive" 거부**. CLI(outbox)는 누락 시 `knowledge`를 자동 주입하지만, `SyncAgent`를 직접 임베드할 땐 소스에서 반드시 채울 것.
+- **`division`은 `metadata.division`에만** — top-level `division`은 필터가 보지 않는다. blocked_divisions 차단을 기대한다면 반드시 metadata 안에 넣을 것.
+
 ### 보안 체크
 
 - `intake_server`는 기본 `127.0.0.1` 바인딩. LAN 노출은 `BRAIN_SHARE_INTAKE_HOST=0.0.0.0` 명시 + 키 강도 충분히.
@@ -264,4 +287,4 @@ a.run_forever(period_seconds=180,
 
 ---
 
-*Mokai Brain Kit 3.2.0 — agent brain_share upgrade package*
+*Mokai Brain Kit 3.2.1 — agent brain_share upgrade package*

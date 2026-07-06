@@ -4,6 +4,21 @@
 
 ---
 
+## [3.2.1] - 2026-07-06
+
+첫 실가동 leaf(OH PC) 설치에서 발견된 버그 3건 수정 (PATCH — 기능 추가 없음, 기존 API 무변경).
+
+### 수정
+- **`healthcheck.py` — 콘솔 cp949 크래시**: Windows 콘솔(cp949)에서 em-dash(—) 등 비ASCII print 시 UnicodeEncodeError로 진단 자체가 중단. `sys.stdout/stderr.reconfigure(encoding="utf-8", errors="replace")` 강제 (install.py v3.0.1과 동일 패턴 — v3.2.0 외부 기여 파일에 미적용이었음).
+- **`sync_agent.py` — CLI 진입점 신설 (LEAF_REGISTRATION 4단계 명령 동작 불가 해소)**: 기존 문서의 `pythonw -m brain_share.sync_agent --config … --node … --intake …`가 `__main__`/argparse 부재로 동작하지 않던 문서 버그. outbox 디렉토리 방식 CLI 추가 — `<ROOT>/outbox/*.json` 드롭 → SQLite 큐 → 메인 intake 업로드, 처리분 `outbox/sent/` 이동, `collection` 누락 시 `knowledge` 자동 주입, malformed 파일은 보존·재시도. `--once`(1회 실행), `--outbox`/`--queue`/`--collection`/`--period` 옵션, `--node`/`--intake`는 `AGENT_NAME`/`BRAIN_INTAKE_URL` env 폴백. stdlib 전용 유지(무거운 의존 0).
+- **`leaf_registration.py` — 4단계 VBS 수정 + 업로드 스키마 문서화**: VBS에 `WshShell.CurrentDirectory = 메모리루트` 추가(`-m` 임포트 필수 조건), 신규 "## 5. 업로드 아이템 스키마" 섹션 — intake 필터가 item의 `collection`을 allowed_collections와 대조하므로 **`collection` 없는 아이템은 전부 "sensitive" 거부**, `division`은 top-level이 아닌 **`metadata.division`만 인정**함을 명시. README 6장에도 동일 스키마 문서 추가.
+
+### 검증
+- 신규 4 단위테스트(outbox collection 주입·sent 이동 / malformed 보존 / CLI `--once` 종단 / 필수 인자 검증). 126+4 = **130/130 통과**.
+- healthcheck.py는 `PYTHONIOENCODING=cp949` 강제 상태에서 전 항목 출력 완주 확인.
+
+---
+
 ## [3.2.0] - 2026-07-03
 
 ### 추가 — 3가지 설치 후 유틸리티 (외부 기여)

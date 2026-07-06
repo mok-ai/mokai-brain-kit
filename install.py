@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-install.py — Mokai Brain Kit 3.2.0 installer
+install.py — Mokai Brain Kit 3.2.1 installer
 DATA-PRESERVING: read + add only. Never deletes chroma_db, obsidian, or any existing content.
 """
 
@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSION = "3.1.1"
+VERSION = "3.2.1"
 
 # ─────────────────────────────────────────────
 # Force UTF-8 stdout/stderr (avoid cp949 crash on em-dash, korean banners)

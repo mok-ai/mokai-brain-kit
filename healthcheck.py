@@ -24,6 +24,17 @@ import sys
 import urllib.request
 from pathlib import Path
 
+# ─────────────────────────────────────────────
+# Windows 콘솔(cp949)에서 em-dash 등 비ASCII 출력 시 UnicodeEncodeError로
+# 진단 자체가 중단되는 것을 방지 (install.py와 동일 패턴)
+# ─────────────────────────────────────────────
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if _stream is not None and hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 OK, WARN, FAIL, INFO = "[OK]  ", "[WARN]", "[FAIL]", "[..]  "
 results = []  # (status, label, detail)
 

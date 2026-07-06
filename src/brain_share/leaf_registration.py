@@ -60,16 +60,36 @@ setx AGENT_NAME       "leaf-원하는이름"
 
 ```vbscript
 Set WshShell = CreateObject("WScript.Shell")
+WshShell.CurrentDirectory = "C:\\leaf\\memory"
 WshShell.Run "pythonw -m brain_share.sync_agent --config C:/leaf/memory/brain_share_config.json --node leaf-원하는이름 --intake http://{main_host}:9212/intake", 0, False
 ```
 
-(또는 동등한 Python 한 줄을 시작프로그램에 등록 — 환경변수 사용 가능)
+- `CurrentDirectory`는 반드시 메모리 루트(그 안에 `brain_share/` 폴더가 있는 곳)로 — `-m` 임포트가 여기서 됨.
+- `--node`/`--intake`는 3단계 환경변수(`AGENT_NAME`/`BRAIN_INTAKE_URL`)가 있으면 생략 가능.
+- 동작: `C:/leaf/memory/outbox/*.json` 에 떨군 파일을 180초 주기로 큐에 담아 메인에 업로드, 처리분은 `outbox/sent/` 로 이동. 수동 1회 실행은 `--once`.
+
+## 5. 업로드 아이템 스키마 (중요 — 어기면 전량 거부)
+
+`outbox/*.json` 은 아이템 dict 1개 또는 dict 배열. 필드 규칙:
+
+```json
+{{
+  "content": "본문 (필수, 비어있으면 거부)",
+  "collection": "knowledge",
+  "metadata": {{"division": "SYSTEM", "tags": ["..."]}},
+  "topic": "선택"
+}}
+```
+
+- **`collection` 필수**: 메인 intake 필터가 allowed_collections(`wiki`/`knowledge`/`decisions`/`conversations`/`tasks`)와 대조 — 없거나 다른 값이면 **"sensitive"로 거부**됨. sync_agent CLI는 누락 시 `knowledge`를 자동 주입.
+- **`division`은 `metadata.division`에만**: top-level `division`은 무시됨. 메인 blocked_divisions에 걸리면 거부(정상 동작).
+- `content`가 blocked_keyword_patterns(예: api_key, secret)에 걸려도 거부됨.
 
 ---
 
 ## 메인 운영자 메모
 
-- 새 하위 추가 = 위 1~4단계 복붙.
+- 새 하위 추가 = 위 1~5단계 복붙 (5는 스키마 숙지).
 - read_key는 **비밀** (LAN 외부 노출 금지). 외부 노출 시 즉시 메인 brain_share_config.json 의 read_key를 새 값으로 교체하고 모든 하위 재등록.
 - 메인 IP/도메인 변경 시 이 파일의 `{main_host}` 자리만 일괄 수정 + 모든 하위 재등록.
 - 메인 서버 가동:
@@ -80,7 +100,7 @@ WshShell.Run "pythonw -m brain_share.sync_agent --config C:/leaf/memory/brain_sh
 
 
 def emit_leaf_registration(root, read_key: str, main_host: str = None,
-                           version: str = "3.1.1",
+                           version: str = "3.2.1",
                            today: str = None) -> Path:
     """Write LEAF_REGISTRATION.md under root, idempotent.
 

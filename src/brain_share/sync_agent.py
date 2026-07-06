@@ -6,15 +6,30 @@ and POSTs pending batches to the main brain intake server.
 Idempotent: item.id = sha256(node_id + content)[:16] -> same content from
 the same node always produces the same id, so re-enqueue/re-flush is a
 no-op on the server (deduped) and locally (UNIQUE constraint).
+
+CLI (outbox mode)::
+
+    python -m brain_share.sync_agent --config <ROOT>/brain_share_config.json \
+        --node leaf1 --intake http://main:9212/intake
+
+Drop item files into ``<ROOT>/outbox/*.json`` (one dict or a list of dicts,
+each with a non-empty "content"). Parsed files move to ``outbox/sent/``.
+Items without "collection" get the default ("knowledge") injected — the HUB
+intake filter rejects any collection outside its allowed_collections as
+"sensitive". Division must live in ``metadata.division`` (top-level ignored).
 """
+import argparse
 import json
 import logging
+import os
+import shutil
 import sqlite3
+import sys
 import time
 import urllib.request
 from typing import Iterable
 
-from brain_share.config import BrainShareConfig
+from brain_share.config import BrainShareConfig, load_config
 from brain_share.intake_filter import compute_item_id
 
 log = logging.getLogger("brain_share.sync")
@@ -139,3 +154,92 @@ class SyncAgent:
             except Exception as e:
                 log.warning("flush error: %s", e)
             time.sleep(period_seconds)
+
+
+def iter_outbox(outbox_dir: str, sent_dir: str,
+                default_collection: str = "knowledge"):
+    """Yield items from ``outbox_dir/*.json``; move parsed files to sent_dir.
+
+    Each file holds one dict or a list of dicts. Items missing "collection"
+    get ``default_collection`` injected (the HUB intake filter rejects items
+    whose collection is not in its allowed_collections as "sensitive").
+    Malformed files stay in place (retried next cycle) with a warning —
+    never silently discarded.
+    """
+    os.makedirs(sent_dir, exist_ok=True)
+    for name in sorted(os.listdir(outbox_dir)):
+        path = os.path.join(outbox_dir, name)
+        if not name.lower().endswith(".json") or not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                data = json.load(f)
+        except Exception as e:
+            log.warning("outbox skip %s: %s", name, e)
+            continue
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if isinstance(item, dict):
+                item.setdefault("collection", default_collection)
+                yield item
+        shutil.move(path, os.path.join(sent_dir, name))
+
+
+def main(argv=None, http_post=None):
+    """CLI entry: ``python -m brain_share.sync_agent`` (LEAF_REGISTRATION 4단계).
+
+    Watches <ROOT>/outbox for item files and uploads them to the main brain.
+    ROOT is derived from --config's directory unless --outbox/--queue given.
+    """
+    # pythonw는 stdout이 None, 콘솔은 cp949 — 어느 쪽에서도 죽지 않게
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            if _s is not None and hasattr(_s, "reconfigure"):
+                _s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    ap = argparse.ArgumentParser(
+        prog="brain_share.sync_agent",
+        description="Leaf outbox uploader — <ROOT>/outbox/*.json to main intake")
+    ap.add_argument("--config", required=True,
+                    help="brain_share_config.json path (parent dir = ROOT)")
+    ap.add_argument("--node", default=os.environ.get("AGENT_NAME"),
+                    help="node id (default: $AGENT_NAME)")
+    ap.add_argument("--intake", default=os.environ.get("BRAIN_INTAKE_URL"),
+                    help="main intake URL (default: $BRAIN_INTAKE_URL)")
+    ap.add_argument("--outbox", default=None,
+                    help="outbox dir (default: <ROOT>/outbox)")
+    ap.add_argument("--queue", default=None,
+                    help="queue db path (default: <ROOT>/sync_queue.db)")
+    ap.add_argument("--collection", default="knowledge",
+                    help="collection injected when an item has none")
+    ap.add_argument("--period", type=int, default=180,
+                    help="flush period seconds (default 180)")
+    ap.add_argument("--once", action="store_true",
+                    help="single collect+flush pass, then exit")
+    args = ap.parse_args(argv)
+    if not args.node:
+        ap.error("--node required (or set AGENT_NAME)")
+    if not args.intake:
+        ap.error("--intake required (or set BRAIN_INTAKE_URL)")
+
+    cfg = load_config(args.config)
+    root = os.path.dirname(os.path.abspath(args.config))
+    outbox = args.outbox or os.path.join(root, "outbox")
+    sent = os.path.join(outbox, "sent")
+    os.makedirs(outbox, exist_ok=True)
+    queue = SyncQueue(args.queue or os.path.join(root, "sync_queue.db"))
+    agent = SyncAgent(cfg, node_id=args.node, intake_url=args.intake,
+                      queue=queue, http_post=http_post)
+
+    def source():
+        return iter_outbox(outbox, sent, default_collection=args.collection)
+
+    if args.once:
+        agent.collect(source())
+        return agent.flush()
+    agent.run_forever(period_seconds=args.period, source_iter_factory=source)
+
+
+if __name__ == "__main__":
+    main()
