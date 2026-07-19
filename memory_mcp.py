@@ -43,6 +43,18 @@ DEFAULT_MEM_TYPE = os.environ.get("RAG_MEM_TYPE", "knowledge")
 AGENT_NAME = os.environ.get("AGENT_NAME", "brain").strip() or "brain"
 MCP_NAME = os.environ.get("MEMORY_MCP_NAME", f"{AGENT_NAME}-memory")
 
+# chroma_path / wiki collection — used by wiki_first fallback in recall_memory
+CHROMA_PATH = os.environ.get("CHROMA_PATH", "")   # auto-detect when empty
+WIKI_COLLECTION = os.environ.get("WIKI_COLLECTION", f"{AGENT_NAME}_wiki")
+
+
+def _autodetect_chroma_path() -> str:
+    """Best-effort: MEMORY_PATH env / ../chroma_db relative to CWD."""
+    root = os.environ.get("MEMORY_PATH") or os.getcwd()
+    guess = os.path.join(root, "chroma_db")
+    return guess if os.path.isdir(guess) else ""
+
+
 mcp = FastMCP(MCP_NAME)
 
 
@@ -60,22 +72,57 @@ def _post(path: str, payload: dict, timeout: float = 30.0) -> dict:
 
 
 @mcp.tool()
-def recall_memory(query: str, top_k: int = 5) -> list:
+def recall_memory(query: str, top_k: int = 5, wiki_first: bool = True) -> list:
     """과거 장기기억을 검색해 관련 기억을 돌려준다.
 
     Args:
         query: 찾고 싶은 내용(자연어).
         top_k: 최대 개수(기본 5).
+        wiki_first: True면 정본 위키 컬렉션을 chroma 직접 쿼리로 먼저 조회
+                    한 뒤 RAG API 결과와 병합·중복제거(id 기준). RAG API의
+                    리랭커가 wiki를 걸러내는 경우에 대비한 안전망.
     Returns:
         관련 기억 리스트. 각 항목은 content/collection/score/id/division/timestamp.
     """
+    wiki_hits = []
+    if wiki_first:
+        chroma_path = CHROMA_PATH or _autodetect_chroma_path()
+        if chroma_path:
+            try:
+                from brain_share.wiki_search import search_wiki  # lazy
+                wiki_hits = search_wiki(query, top_k,
+                                        chroma_path=chroma_path,
+                                        collection_name=WIKI_COLLECTION)
+            except Exception:
+                wiki_hits = []
+
     try:
         resp = _post(SEARCH_PATH, {"query": query, "top_k": top_k, "min_score": 0})
     except Exception as e:
-        return [{"error": f"검색 실패: {type(e).__name__}: {e}", "url": RAG_BASE + SEARCH_PATH}]
-    rows = resp.get("results", resp.get("matches", []))
+        rag_rows = []
+    else:
+        rag_rows = resp.get("results", resp.get("matches", []))
+
+    normalized_rag = []
+    for r in rag_rows:
+        m = r.get("metadata", {}) or {}
+        normalized_rag.append({
+            "content": r.get("content", ""),
+            "collection": r.get("collection", ""),
+            "score": r.get("score"),
+            "id": r.get("id", ""),
+            "metadata": m,
+        })
+
+    if wiki_first:
+        from brain_share.wiki_search import merge_and_dedupe  # lazy
+        merged = merge_and_dedupe(wiki_hits, normalized_rag, top_k)
+    else:
+        merged = normalized_rag[:top_k]
+
+    # Backward-compatible top-level fields for existing callers
     out = []
-    for r in rows:
+    for r in merged:
         m = r.get("metadata", {}) or {}
         out.append({
             "content": r.get("content", ""),

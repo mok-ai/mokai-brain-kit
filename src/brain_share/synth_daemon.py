@@ -109,3 +109,42 @@ def run_daemon(incoming_dir, vault_dir: str, watermark_db: str,
         except Exception as e:
             log.warning("synth pass error: %s", e)
         time.sleep(period_seconds)
+
+
+def _cli():
+    import argparse
+    import subprocess
+    ap = argparse.ArgumentParser(description="Mokai Brain Kit canonicalization daemon")
+    ap.add_argument("--config", required=True, help="brain_share_config.json path")
+    ap.add_argument("--incoming", required=True, help="incoming/ directory root")
+    ap.add_argument("--vault", required=True, help="obsidian vault dir")
+    ap.add_argument("--watermark-db", default=None,
+                    help="synth watermark sqlite (default: <incoming>/../synth_wm.db)")
+    ap.add_argument("--interval", type=int, default=1800,
+                    help="seconds between passes (default 1800)")
+    args = ap.parse_args()
+    wm_db = args.watermark_db or str(Path(args.incoming).parent / "synth_wm.db")
+
+    # Default LLM injection: claude CLI. Users can override by wrapping in
+    # a small Python file that calls run_daemon() directly.
+    def llm_fn(prompt: str) -> str:
+        try:
+            p = subprocess.run(
+                ["cmd", "/c", "claude", "-p", "--model", "sonnet"],
+                input=prompt, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=300)
+            return p.stdout or ""
+        except Exception as e:
+            log.warning("claude llm failed: %s", e)
+            return ""
+
+    def extractor_fn(text: str):
+        # No entity extraction from CLI default — keep incoming path lightweight.
+        return ([], [])
+
+    run_daemon(args.incoming, args.vault, wm_db, llm_fn, extractor_fn,
+               period_seconds=args.interval)
+
+
+if __name__ == "__main__":
+    _cli()

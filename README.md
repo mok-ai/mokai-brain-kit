@@ -1,4 +1,4 @@
-# Mokai Brain Kit 3.2.2
+# Mokai Brain Kit 3.3.0
 
 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
@@ -287,4 +287,32 @@ a.run_forever(period_seconds=180,
 
 ---
 
-*Mokai Brain Kit 3.2.2 — agent brain_share upgrade package*
+---
+
+## 7. 상주 서비스 & 백업 (3.3.0+)
+
+### 매일 백업 (`backup.py` / `restore.py`)
+`python backup.py --root <root> --keep-days 7` 을 작업 스케줄러 매일 03:00 등록. `chroma_db.zip · obsidian.zip · brain_share_config.json · memory_config.py · LEAF_REGISTRATION.md` 5종 세대 스냅샷 + `manifest.json`(파일별 SHA256). `cutoff = today - (keep_days-1)` 로 시간축 기준 정리(PC가 며칠 꺼져 있어도 예측 가능).
+
+원복은 dry-run 기본:
+
+```bash
+python restore.py --root <root> --date 2026-07-19            # 계획만 출력
+python restore.py --root <root> --date 2026-07-19 --yes      # 실제 원복
+```
+
+### 상주 정본화 데몬 (`brain_share.synth_daemon` CLI)
+`python -m brain_share.synth_daemon --config <cfg> --incoming <root>/incoming --vault <vault> --interval 1800` 로 30분 주기 incoming 증분 정본화(claude CLI 주입). HKCU Run 에 자동시작:
+
+```bash
+python autostart.py register BrainKitSynthDaemon "wscript C:/brainkit/start_synth.vbs"
+python autostart.py list        # BrainKit* 만 필터해서 표시
+python autostart.py unregister BrainKitSynthDaemon
+```
+
+### wiki 검색 노출 (`memory_mcp.recall_memory`)
+기본 `wiki_first=True`. RAG API 리랭커/hybrid 가 정본 위키를 못 잡아도 chroma 직접 쿼리(lazy embedder)로 wiki 상위 결과 확보 후 RAG 결과와 id 기준 병합. `CHROMA_PATH` / `WIKI_COLLECTION` env로 override 가능.
+
+---
+
+*Mokai Brain Kit 3.3.0 — agent brain_share upgrade package*

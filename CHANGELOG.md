@@ -4,6 +4,34 @@
 
 ---
 
+## [3.3.0] - 2026-07-19
+
+### 추가 — A 묶음 (wiki 검색 노출 + 백업/롤백 + 상주 정본화)
+- **`brain_share/wiki_search.py`** + **`memory_mcp.recall_memory(wiki_first=True)`**: RAG API 리랭커가 정본 위키를 걸러내는 문제를 우회. chroma_db 직접 쿼리(lazy embedder 로드)로 `<agent>_wiki` 컬렉션 결과를 먼저 뽑고 RAG API 결과와 id 기준 dedupe/merge. RAG나 embedder 로드가 실패해도 조용히 빈 리스트 반환 → 기존 사용자 무영향.
+- **`backup.py`** + **`restore.py`** (top-level): 매일 세대 스냅샷(`chroma_db.zip` / `obsidian.zip` / `brain_share_config.json` / `memory_config.py` / `LEAF_REGISTRATION.md` + `manifest.json`). 기본 7일 보존, cutoff = `today - (keep_days-1)`. PC가 며칠 꺼져 있어도 오래된 백업을 시간축으로 정확히 정리. `restore.py`는 dry-run 기본, `--yes` 명시해야 실제 원복. `_zip_dir`는 sorted rglob으로 SHA 결정성 보장.
+- **`autostart.py`** (top-level) + **`brain_share/synth_daemon.py`** CLI 엔트리: HKCU Run 키 등록/해제 helper(`BrainKit*` 접두어로 자체 항목만 열람) + `python -m brain_share.synth_daemon --config <cfg> --incoming <dir> --vault <dir> --interval 1800` 상주 데몬. 30분 주기(기본)로 incoming 감지 → 증분 정본화. winreg는 lazy import (non-Windows 안전).
+
+### 검증
+- 신규 3파일 단위테스트 20건(wiki 6 + backup/restore 8 + autostart 6, CLI 1) + 기존 134 = **155/155 통과**.
+- 무거운 의존(chromadb / sentence-transformers / winreg) 전부 lazy import + 주입형 → GPU/윈도 API 없이 결정적 단위테스트.
+- 리뷰 라운드: Task 2에서 Important 2건 발견(prune 알고리즘 브리프 이탈 · zip 결정성 없음) → fix 라운드로 date-cutoff 복원 + `sorted(rglob)` 적용. 재리뷰 클린.
+
+### 사용
+```bash
+# 매일 세대 백업 (작업 스케줄러 03:00 등록)
+python backup.py --root C:/brainkit/memory --keep-days 7
+
+# 상주 정본화 데몬 (백그라운드)
+python -m brain_share.synth_daemon --config brain_share_config.json \
+  --incoming C:/brainkit/memory/incoming --vault C:/brainkit/obsidian
+
+# 자동시작 등록/해제
+python autostart.py register BrainKitSynthDaemon "wscript C:/brainkit/start_synth.vbs"
+python autostart.py list
+```
+
+---
+
 ## [3.2.2] - 2026-07-06
 
 첫 라이브 MCP 클라이언트 접속(leaf 합류)에서 발견된 게이트웨이 인증 치명 버그 수정 (PATCH — 기능 추가 없음, 툴 API 무변경).
