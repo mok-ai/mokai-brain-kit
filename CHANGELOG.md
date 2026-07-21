@@ -4,6 +4,28 @@
 
 ---
 
+## [3.4.0] - 2026-07-20
+
+### 추가 — B1 통합 대시보드
+- **`brain_share/dashboard_scanner.py`**: 순수 read-only 스캐너 6종 — `scan_incoming` (노드별 업로드 카운트/사이즈/마지막 업로드 시각), `scan_backups` (매일 스냅샷 목록 + chroma sha prefix), `scan_synth_watermark` (정본화된 토픽 수), `scan_graph` (관계그래프 노드/엣지/top-degree), `scan_servers` (RAG/게이트웨이/intake 포트 헬스), `collect_all` (전체 aggregate). 모든 함수 에러 시 빈 구조 반환 — 하나 실패해도 대시보드 나머지 표시. `scan_incoming`은 라이브 멀티라이터 incoming의 glob→stat TOCTOU 레이스를 파일별 가드, `scan_backups`는 valid-JSON-but-wrong-shape manifest를 스킵(크래시 대신).
+- **`brain_dashboard.py`** (top-level): stdlib `http.server` 기반 로컬 대시보드. `GET /api/status` → aggregate JSON, `GET /` → 단일 HTML 페이지 (vanilla JS, 30초 auto-refresh, 다크 테마, 카드 5개: Servers/Incoming/Backups/Synth/Graph). 스캐너 문자열은 `esc()`로 XSS 이스케이프. Flask 등 외부 의존 0. 기본 바인딩 `127.0.0.1:9213`, LAN 노출은 `BRAIN_DASHBOARD_HOST=0.0.0.0` env opt-in (무인증이므로 필요 시에만).
+
+### 검증
+- 신규 21건(scanner 14 + 방어 보강 2 + HTTP 5) + 기존 155 = **176/176 통과**.
+- 스캐너 모든 소스 미존재/malformed 시나리오 커버(파일시스템/SQLite/포트 + stat 레이스 + 깨진 manifest).
+- HTTP handler는 in-process request test로 socket 없이 검증.
+
+### 사용
+```bash
+python brain_dashboard.py --root C:/brainkit/memory
+# 브라우저에서 http://127.0.0.1:9213 → 실시간 상태
+
+# LAN 노출 (필요 시)
+BRAIN_DASHBOARD_HOST=0.0.0.0 python brain_dashboard.py --root ...
+```
+
+---
+
 ## [3.3.0] - 2026-07-19
 
 ### 추가 — A 묶음 (wiki 검색 노출 + 백업/롤백 + 상주 정본화)

@@ -1,4 +1,4 @@
-# Mokai Brain Kit 3.3.0
+# Mokai Brain Kit 3.4.0
 
 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
@@ -315,4 +315,30 @@ python autostart.py unregister BrainKitSynthDaemon
 
 ---
 
-*Mokai Brain Kit 3.3.0 — agent brain_share upgrade package*
+## 8. 통합 대시보드 (3.4.0+)
+
+Hub 운영자가 브레인 키트 전체 상태를 한 화면에서 관측하는 로컬 웹뷰.
+
+```bash
+python brain_dashboard.py --root C:/brainkit/memory
+```
+
+브라우저에서 `http://127.0.0.1:9213` 열면 5개 카드:
+- **Servers** — RAG(:9210) · 게이트웨이(:9211) · intake(:9212) 포트 LISTEN 여부
+- **Incoming (per leaf)** — 노드별 업로드 아이템 수 · 총 사이즈 · 마지막 업로드 시각
+- **Backups** — 매일 스냅샷 목록 · 사이즈 · chroma sha prefix
+- **Synth watermark** — 정본화된 토픽 목록
+- **Relation graph** — 노드/엣지 수 · top-degree 노드
+
+30초마다 auto-refresh. 기본 `127.0.0.1` 바인딩(운영자 로컬만). LAN 노출은 `BRAIN_DASHBOARD_HOST=0.0.0.0` env로 opt-in (무인증이므로 신뢰 LAN에서만).
+
+Startup 등록(선택):
+
+```bash
+# start_dashboard.vbs — cd C:\brainkit\memory && python brain_dashboard.py --root C:\brainkit\memory
+python autostart.py register BrainKitDashboard 'wscript C:/brainkit/start_dashboard.vbs'
+```
+
+---
+
+*Mokai Brain Kit 3.4.0 — agent brain_share upgrade package*
