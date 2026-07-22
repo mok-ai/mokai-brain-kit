@@ -129,6 +129,71 @@ def test_run_selfsynth_writes_to_vault_and_wiki_collection(tmp_path):
     assert (tmp_path / "graph.db").exists()
 
 
+def test_run_selfsynth_regraphs_when_topic_content_changes(tmp_path):
+    """Re-running over the same vault/graph with the SAME topic slugs but
+    evolved entities must still update the relation graph.
+
+    Topic slugs (`<prefix>_00`) are reused on every batch, so keying the
+    graph unit_id on the slug alone makes `is_processed` skip every topic
+    from the second run onward — the graph freezes at its first snapshot
+    even as the underlying memory grows.
+    """
+    rng = np.random.default_rng(0)
+    a = rng.normal(loc=[0, 0, 0, 0], scale=0.01, size=(10, 4)).astype(np.float32).tolist()
+    b = rng.normal(loc=[10, 10, 10, 10], scale=0.01, size=(10, 4)).astype(np.float32).tolist()
+    docs = [f"doc_{i}" for i in range(20)]
+    graph_db = str(tmp_path / "graph.db")
+
+    def _run(extract):
+        return run_selfsynth(
+            source_collection=_FakeCol(emb=a + b, docs=docs),
+            wiki_collection=_FakeCol(),
+            vault_dir=str(tmp_path / "vault"),
+            embed_fn=lambda t: [0.0],
+            llm_synth_fn=lambda p: "body",
+            extractor_fn=extract,
+            graph_db_path=graph_db,
+            slug_prefix="test", over_k=4, merge_threshold=0.5, reps_per_topic=3,
+        )
+
+    first = _run(lambda t: (["alpha", "beta"], [("alpha", "rel", "beta")]))
+    assert first["nodes"] == 2
+
+    # Same slugs, evolved content → must be re-graphed, not skipped
+    second = _run(lambda t: (["alpha", "beta", "gamma", "delta"], []))
+    assert second["nodes"] > first["nodes"], (
+        "relation graph frozen: re-synthesized topics were skipped as "
+        "already-processed because unit_id ignores content")
+
+
+def test_run_selfsynth_identical_rerun_stays_idempotent(tmp_path):
+    """Guard the other direction: an unchanged re-run must NOT double-count.
+    Same entities → same unit_id → skipped, node count unchanged."""
+    rng = np.random.default_rng(0)
+    a = rng.normal(loc=[0, 0, 0, 0], scale=0.01, size=(10, 4)).astype(np.float32).tolist()
+    b = rng.normal(loc=[10, 10, 10, 10], scale=0.01, size=(10, 4)).astype(np.float32).tolist()
+    docs = [f"doc_{i}" for i in range(20)]
+    graph_db = str(tmp_path / "graph.db")
+    same = lambda t: (["alpha", "beta"], [("alpha", "rel", "beta")])
+
+    def _run():
+        return run_selfsynth(
+            source_collection=_FakeCol(emb=a + b, docs=docs),
+            wiki_collection=_FakeCol(),
+            vault_dir=str(tmp_path / "vault"),
+            embed_fn=lambda t: [0.0],
+            llm_synth_fn=lambda p: "body",
+            extractor_fn=same,
+            graph_db_path=graph_db,
+            slug_prefix="test", over_k=4, merge_threshold=0.5, reps_per_topic=3,
+        )
+
+    first = _run()
+    second = _run()
+    assert second["nodes"] == first["nodes"]
+    assert second["edges"] == first["edges"]
+
+
 def test_run_selfsynth_empty_source_returns_zero(tmp_path):
     """No source rows → no wikis, no errors."""
     source = _FakeCol(emb=[], docs=[])

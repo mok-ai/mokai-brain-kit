@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-install.py — Mokai Brain Kit 3.4.0 installer
+install.py — Mokai Brain Kit 3.4.1 installer
 DATA-PRESERVING: read + add only. Never deletes chroma_db, obsidian, or any existing content.
 """
 

@@ -16,6 +16,7 @@ fresh content stays at the same id, no duplicate accumulation).
 import os
 import io
 import datetime
+import hashlib
 from typing import Callable, Optional
 
 import numpy as np
@@ -143,7 +144,16 @@ def run_selfsynth(
         path = store.upsert(page)
         if page.body:
             made += 1
-            scan_units.append((slug, page.entities))
+            # Graph unit_id must key on CONTENT, not the slug alone. Slugs
+            # (`<prefix>_00`) are reused every batch, so a slug-only id makes
+            # graph_batch's is_processed() skip every topic from the second
+            # run onward — the relation graph freezes at its first snapshot
+            # while the source memory keeps growing. Hashing the entities
+            # keeps idempotency (unchanged topic → same id → skipped) while
+            # letting evolved topics re-enter the graph.
+            ent_sig = hashlib.sha1(
+                "|".join(map(str, page.entities)).encode("utf-8")).hexdigest()[:12]
+            scan_units.append((f"{slug}@{ent_sig}", page.entities))
             log(f"   - {slug}: {len(page.entities)}E {len(page.relations)}R -> "
                 f"{os.path.basename(path) if path else 'X'}")
 
