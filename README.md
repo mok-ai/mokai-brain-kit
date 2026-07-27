@@ -1,4 +1,4 @@
-# Mokai Brain Kit 3.4.1
+# Mokai Brain Kit 3.4.2
 
 변경 이력은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
@@ -341,4 +341,4 @@ python autostart.py register BrainKitDashboard 'wscript C:/brainkit/start_dashbo
 
 ---
 
-*Mokai Brain Kit 3.4.1 — agent brain_share upgrade package*
+*Mokai Brain Kit 3.4.2 — agent brain_share upgrade package*

@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-print("Mokai Brain Kit 3.4.1")
+print("Mokai Brain Kit 3.4.2")
 
 # ── 기본값 ─────────────────────────────────────────────────────────────────
 DEFAULT_ROOT = Path.home() / ".claude"

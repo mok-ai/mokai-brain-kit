@@ -59,11 +59,15 @@ setx AGENT_NAME       "leaf-원하는이름"
 `C:/leaf/start_sync.vbs` 저장 후 시작프로그램(`shell:startup`)에 둠:
 
 ```vbscript
+' ASCII-only comments (wscript parses this file as ANSI).
 Set WshShell = CreateObject("WScript.Shell")
 WshShell.CurrentDirectory = "C:\\leaf\\memory"
-WshShell.Run "pythonw -m brain_share.sync_agent --config C:/leaf/memory/brain_share_config.json --node leaf-원하는이름 --intake http://{main_host}:9212/intake", 0, False
+WshShell.Run "cmd /c python -m brain_share.sync_agent --config C:/leaf/memory/brain_share_config.json --node leaf-원하는이름 --intake http://{main_host}:9212/intake > C:\\leaf\\memory\\sync_boot.log 2>&1", 0, False
 ```
 
+- ★**`cmd /c ... > 로그 2>&1` 래핑은 필수**입니다. `WshShell.Run "python ...", 0, False`처럼 맨몸으로 부르면 stdout 핸들이 없어 **로그 한 줄 없이 조용히 기동 실패**합니다. 게다가 작업 스케줄러는 wscript 종료코드만 보므로 `LastResult=0`(성공)으로 기록해 실패를 은폐합니다. 실측 4건.
+- ★**`pythonw`가 아니라 `python`**을 씁니다. pythonw는 stdout/stderr가 없어 리다이렉트해도 빈 로그만 남습니다(= 실패 원인 추적 불가).
+- 기동 확인은 `sync_boot.log`로 — 파일이 안 생겼으면 VBS가 아예 안 돈 것이고, 비어 있으면 정상 상주 중입니다.
 - `CurrentDirectory`는 반드시 메모리 루트(그 안에 `brain_share/` 폴더가 있는 곳)로 — `-m` 임포트가 여기서 됨.
 - `--node`/`--intake`는 3단계 환경변수(`AGENT_NAME`/`BRAIN_INTAKE_URL`)가 있으면 생략 가능.
 - 동작: `C:/leaf/memory/outbox/*.json` 에 떨군 파일을 180초 주기로 큐에 담아 메인에 업로드, 처리분은 `outbox/sent/` 로 이동. 수동 1회 실행은 `--once`.
@@ -95,12 +99,14 @@ WshShell.Run "pythonw -m brain_share.sync_agent --config C:/leaf/memory/brain_sh
 - 메인 서버 가동:
   - 게이트웨이 (읽기 :9211) — `python -m brain_share.gateway_mcp --config <cfg>`
   - intake (쓰기 :9212) — `python -m brain_share.intake_server --config <cfg> --incoming <ROOT>/incoming`
-  - 정본화 데몬 — `python -c "from brain_share.synth_daemon import run_daemon; ..."`
+  - 정본화 데몬 — `python -m brain_share.synth_daemon --config <cfg> --incoming <ROOT>/incoming --vault <볼트> --interval 1800`
+  - 대시보드 (관측 :9213) — `python brain_dashboard.py --root <ROOT>`
+- ★메인 서버들을 VBS로 부팅 자동시작 걸 때도 위 4단계와 **똑같이 `cmd /c ... > 로그 2>&1`로 감쌉니다.** 안 감싸면 조용히 안 뜹니다.
 """
 
 
 def emit_leaf_registration(root, read_key: str, main_host: str = None,
-                           version: str = "3.2.2",
+                           version: str = "3.4.2",
                            today: str = None) -> Path:
     """Write LEAF_REGISTRATION.md under root, idempotent.
 

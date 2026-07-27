@@ -63,3 +63,34 @@ def test_emit_uses_placeholder_when_main_host_none(tmp_path):
     # Placeholder appears on both port references
     assert f"{PLACEHOLDER_HOST}:9211" in body
     assert f"{PLACEHOLDER_HOST}:9212" in body
+
+
+def _vbs_run_lines(body: str):
+    """Every `WshShell.Run "..."` / `sh.Run "..."` command line in the doc."""
+    return [ln.strip() for ln in body.splitlines()
+            if ".Run " in ln and ln.strip().startswith(("WshShell.Run",
+                                                        "sh.Run"))]
+
+
+def test_vbs_launcher_wraps_in_cmd_with_logfile():
+    """A bare `WshShell.Run "python ...", 0, False` has no stdout handle and
+    silently fails to start — no process, no log, and the scheduler still
+    records LastResult=0. Every launcher we hand an operator must wrap the
+    command in `cmd /c ... > <log> 2>&1` so a failure leaves evidence."""
+    body = render_leaf_registration(read_key="k", main_host="main.lan",
+                                    version="3.4.2", today="2026-07-27")
+    runs = _vbs_run_lines(body)
+    assert runs, "template must still ship a VBS launcher"
+    for line in runs:
+        assert "cmd /c" in line, f"launcher not wrapped in cmd /c: {line}"
+        assert "2>&1" in line, f"launcher does not capture stderr: {line}"
+        assert ".log" in line, f"launcher writes no logfile: {line}"
+
+
+def test_vbs_launcher_does_not_use_pythonw():
+    """pythonw.exe has no stdout/stderr, so redirecting its output yields an
+    empty log — the exact blindness this fix removes. Must be python.exe."""
+    body = render_leaf_registration(read_key="k", main_host="main.lan",
+                                    version="3.4.2", today="2026-07-27")
+    for line in _vbs_run_lines(body):
+        assert "pythonw" not in line, f"pythonw defeats logging: {line}"
