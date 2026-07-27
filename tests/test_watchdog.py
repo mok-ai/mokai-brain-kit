@@ -87,6 +87,28 @@ def test_grace_window_suppresses_immediate_recheck():
     assert state["gateway"]["failures"] == 1  # not incremented
 
 
+def test_holding_off_is_logged_not_silent():
+    """'Held off on purpose' and 'the watchdog never ran' look identical in
+    an empty log. That ambiguity cost real debugging time on 2026-07-27."""
+    lines = []
+    state = {"gateway": {"last_restart": 1000.0, "failures": 1,
+                         "gave_up": False}}
+    check_once([svc(grace=300)], probe=probe_all(False), launch=Launcher(),
+               state=state, now=1100.0, log=lines.append)
+    assert lines, "grace must leave a trace"
+    assert "grace" in lines[0] and "100s" in lines[0]
+
+
+def test_given_up_service_keeps_reporting_itself():
+    """Silence after giving up would read as 'all healthy'."""
+    lines = []
+    state = {"gateway": {"last_restart": 1.0, "failures": 3,
+                         "gave_up": True}}
+    check_once([svc()], probe=probe_all(False), launch=Launcher(),
+               state=state, now=9000.0, log=lines.append)
+    assert lines and "given up" in lines[0]
+
+
 def test_restart_again_once_grace_expired():
     state = {"gateway": {"last_restart": 1000.0, "failures": 1,
                          "gave_up": False}}

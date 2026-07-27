@@ -123,10 +123,18 @@ def check_once(services, *, probe, launch, state, now,
 
         if st["gave_up"]:
             result["gave_up"].append(s.name)
+            say(f"{s.name}: DOWN on :{s.port}, still given up "
+                f"({st['failures']} failed attempts) — needs a human")
             continue
 
         if now - st["last_restart"] < s.grace_seconds:
+            # Logged, not silent: "held off deliberately" and "the watchdog
+            # never ran" look identical in an empty log, and that ambiguity
+            # costs real debugging time.
+            waited = int(now - st["last_restart"])
             result["grace"].append(s.name)
+            say(f"{s.name}: DOWN on :{s.port} but only {waited}s since last "
+                f"restart (grace {s.grace_seconds}s) — holding off")
             continue
 
         try:
