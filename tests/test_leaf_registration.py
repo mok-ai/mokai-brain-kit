@@ -78,7 +78,7 @@ def test_vbs_launcher_wraps_in_cmd_with_logfile():
     records LastResult=0. Every launcher we hand an operator must wrap the
     command in `cmd /c ... > <log> 2>&1` so a failure leaves evidence."""
     body = render_leaf_registration(read_key="k", main_host="main.lan",
-                                    version="3.4.2", today="2026-07-27")
+                                    version="3.5.0", today="2026-07-27")
     runs = _vbs_run_lines(body)
     assert runs, "template must still ship a VBS launcher"
     for line in runs:
@@ -91,6 +91,6 @@ def test_vbs_launcher_does_not_use_pythonw():
     """pythonw.exe has no stdout/stderr, so redirecting its output yields an
     empty log — the exact blindness this fix removes. Must be python.exe."""
     body = render_leaf_registration(read_key="k", main_host="main.lan",
-                                    version="3.4.2", today="2026-07-27")
+                                    version="3.5.0", today="2026-07-27")
     for line in _vbs_run_lines(body):
         assert "pythonw" not in line, f"pythonw defeats logging: {line}"

@@ -1,0 +1,34 @@
+{
+  "role": "HUB",
+  "read_key": "CHANGE-ME-INSTALL-TIME",
+  "share_port": 9211,
+  "vault_dir": "C:/main_ai/obsidian",
+  "blocked_divisions": ["ACCOUNTING", "FINANCE", "CUSTOMER", "HR"],
+  "blocked_tag_patterns": ["회계", "세무", "손익", "고객명단", "미수금", "매매", "백테스트"],
+  "blocked_keyword_patterns": ["api_key", "secret", "비밀번호", "인증서", "token", "passwd"],
+  "allowed_collections": ["wiki", "knowledge", "decisions", "conversations", "tasks"],
+
+  "_watchdog_comment": "Optional. Guards port-backed daemons. Run `python brain_watchdog.py --root <ROOT> --once` from Task Scheduler every ~5 min. Omit this section on a LEAF (no daemons to guard). launcher may also be an argument list.",
+  "watchdog": {
+    "max_failures": 3,
+    "services": [
+      {
+        "name": "gateway",
+        "port": 9211,
+        "launcher": "wscript C:/brainkit/start_gateway.vbs",
+        "grace_seconds": 300
+      },
+      {
+        "name": "intake",
+        "port": 9212,
+        "launcher": "wscript C:/brainkit/start_intake.vbs"
+      },
+      {
+        "name": "dashboard",
+        "port": 9213,
+        "launcher": "wscript C:/brainkit/start_dashboard.vbs",
+        "grace_seconds": 60
+      }
+    ]
+  }
+}

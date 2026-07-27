@@ -13,7 +13,7 @@ description: Analyze and summarize the CONTENT of a YouTube video by extracting 
 2. 자막 추출 스크립트를 실행한다:
 
    ```powershell
-   python "C:\Users\neole\.claude\skills\youtube-summary\scripts\yt_transcript.py" "<URL>"
+   python "%USERPROFILE%\.claude\skills\youtube-summary\scripts\yt_transcript.py" "<URL>"
    ```
 
    - 한국어 자막을 우선, 없으면 영어, 그래도 없으면 자동생성 자막을 사용한다.
@@ -35,7 +35,7 @@ description: Analyze and summarize the CONTENT of a YouTube video by extracting 
 - 자막이 아예 없는 영상(자막 비공개)은 분석 불가 → 사용자에게 명확히 알린다.
 - "Sign in to confirm you're not a bot" 등 봇 차단이 나오면 브라우저 쿠키를 사용한다:
   ```powershell
-  python "C:\Users\neole\.claude\skills\youtube-summary\scripts\yt_transcript.py" "<URL>" --cookies-from-browser chrome
+  python "%USERPROFILE%\.claude\skills\youtube-summary\scripts\yt_transcript.py" "<URL>" --cookies-from-browser chrome
   ```
 - 자동생성 자막은 오타·동음이의 오류가 있을 수 있으니, 고유명사·숫자는 추정임을 표시한다.
 - 의존성(`yt-dlp`)은 이미 설치되어 있다. 없으면 `pip install -U yt-dlp`.

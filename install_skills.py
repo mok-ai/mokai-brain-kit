@@ -5,6 +5,7 @@ ADDITIVE only: never deletes existing skills or plugin directories.
 """
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -12,7 +13,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-print("Mokai Brain Kit 3.4.2")
+print("Mokai Brain Kit 3.5.0")
 
 
 def copy_skills(skills_src: Path, claude_home: Path) -> list[str]:
@@ -53,6 +54,105 @@ def merge_plugins(plugins_zip: Path, claude_home: Path) -> bool:
             zf.extract(member, claude_home)
     print(f"  [plugins] Merge complete -> {plugins_dst}")
     return True
+
+
+def plan_registry(cache_root: str, found, existing: dict) -> dict:
+    """Build installed_plugins.json content for THIS machine.
+
+    The bundle deliberately ships no installed_plugins.json: that file stores
+    absolute installPaths, and baking the build machine's paths into a public
+    package leaked a personal account path for eleven releases (fixed 3.5.0)
+    and was wrong on every other machine anyway. So the installer regenerates
+    it here from the cache tree it just unpacked.
+
+    Pure function. `found` is [(marketplace, plugin, version), ...].
+    Entries for plugins we did NOT ship are preserved untouched — this is an
+    additive installer, not a replacement.
+    """
+    out = dict(existing.get("plugins") or {})
+    stamp = _now_iso()
+    for market, plug, version in found:
+        key = f"{plug}@{market}"
+        prev = out.get(key) or [{}]
+        first = prev[0] if isinstance(prev, list) and prev else {}
+        out[key] = [{
+            "scope": "user",
+            "installPath": str(Path(cache_root) / market / plug / version),
+            "version": version,
+            "installedAt": first.get("installedAt", stamp),
+            "lastUpdated": stamp,
+        }]
+    merged = dict(existing)
+    merged["version"] = existing.get("version", 2)
+    merged["plugins"] = out
+    return merged
+
+
+def plan_marketplaces(marketplaces_root: str, shipped: dict,
+                      existing: dict) -> dict:
+    """Fill installLocation (machine-local) into shipped marketplace meta,
+    keeping any marketplace the user already had."""
+    merged = dict(existing)
+    for name, meta in (shipped or {}).items():
+        entry = dict(merged.get(name) or {})
+        entry.update(meta)
+        entry["installLocation"] = str(Path(marketplaces_root) / name)
+        merged[name] = entry
+    return merged
+
+
+def _now_iso() -> str:
+    import datetime
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z")
+
+
+def scan_cache(cache_root: Path):
+    """[(marketplace, plugin, version)] for every plugin dir under cache."""
+    found = []
+    if not cache_root.is_dir():
+        return found
+    for market in sorted(p for p in cache_root.iterdir() if p.is_dir()):
+        for plug in sorted(p for p in market.iterdir() if p.is_dir()):
+            for ver in sorted(p for p in plug.iterdir() if p.is_dir()):
+                found.append((market.name, plug.name, ver.name))
+    return found
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def register_plugins(claude_home: Path) -> int:
+    """Regenerate installed_plugins.json / known_marketplaces.json with paths
+    local to this machine. Returns how many plugins were registered."""
+    plugins_dir = claude_home / "plugins"
+    cache_root = plugins_dir / "cache"
+    found = scan_cache(cache_root)
+    if not found:
+        print("  [WARN] no plugin cache found — nothing to register")
+        return 0
+
+    reg_path = plugins_dir / "installed_plugins.json"
+    reg = plan_registry(str(cache_root), found, _read_json(reg_path))
+    reg_path.write_text(json.dumps(reg, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+
+    km_path = plugins_dir / "known_marketplaces.json"
+    shipped = _read_json(km_path)
+    km = plan_marketplaces(str(plugins_dir / "marketplaces"), shipped,
+                           _read_json(km_path))
+    km_path.write_text(json.dumps(km, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+
+    for market, plug, ver in found:
+        print(f"  [reg] {plug}@{market} [{ver}]")
+    return len(found)
 
 
 def run_best_effort(cmd: list[str], label: str) -> bool:
@@ -147,9 +247,10 @@ def main():
     skills_copied = copy_skills(here / "skills", claude_home)
     print()
 
-    # 2. Merge plugins
+    # 2. Merge plugins, then register them with paths local to THIS machine
     print("[2/3] Merging plugins...")
     plugins_ok = merge_plugins(here / "plugins.zip", claude_home)
+    registered = register_plugins(claude_home) if plugins_ok else 0
     print()
 
     # 3. Install runtime tools
@@ -164,7 +265,8 @@ def main():
     print(f"Skills copied  : {len(skills_copied)}")
     for s in skills_copied:
         print(f"  - {s}")
-    print(f"Plugins merged : {'OK' if plugins_ok else 'FAILED/SKIPPED'}")
+    print(f"Plugins merged : {'OK' if plugins_ok else 'FAILED/SKIPPED'}"
+          f"  (registered {registered})")
     print("Tools:")
     for name, ok in tool_results.items():
         status = "OK" if ok else "FAILED/SKIPPED"

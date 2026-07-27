@@ -4,6 +4,43 @@
 
 ---
 
+## [3.5.0] - 2026-07-27
+
+### 🔒 보안 — 공개 배포본에 빌드 머신의 개인 계정 경로 포함 (v3.0.1~v3.4.2)
+- `skills_bundle/plugins.zip` 안의 `installed_plugins.json` · `known_marketplaces.json`이 빌드 머신의 절대경로(`C:\Users\<계정>\.claude\plugins\...`)를 그대로 담고 있었다. **11개 공개 릴리스 자산 전부**에 포함. 3.0.0의 "내부 식별자 전량 제거" 전수 검사가 **zip 안의 zip까지는 보지 못했다.**
+- 부수 피해: 그 경로는 다른 머신에서 유효하지 않으므로 플러그인 등록이 애초에 어긋나 있었다.
+- **조치**: ①번들에서 두 파일 제외 — 이제 `plugins.zip`은 캐시 트리만 담는다. ②`install_skills.py`가 설치 시점에 **로컬 경로로 레지스트리를 재생성**(`plan_registry`/`plan_marketplaces`, 사용자가 이미 설치한 플러그인 항목은 보존하는 additive 병합). ③GitHub Release 자산 11개 및 배포 서버의 구버전 zip 전량 삭제.
+- **회귀 방지**: 산출물 자체를 검사하는 테스트 추가 — 배포될 `plugins.zip`에 `installed_plugins.json`·개인경로·`installLocation`이 없어야 통과.
+- ★교훈: **중첩 아카이브는 grep의 사각지대다.** 배포 전 검사는 zip 안의 zip까지 풀어서 본다.
+
+### 추가 — 자가복구 워치독 (`brain_share/watchdog.py` + `brain_watchdog.py`)
+등록돼 있다고 뜨는 게 아니다. 2026-07-27 실측: autostart 4종이 등록·활성·대화형 로그온 정상인데도 재부팅 후 **하나도 뜨지 않았고, 로그조차 없었다.**
+- 포트 프로브 → 죽은 서비스 재기동. **grace window**(기본 300초)로 느린 기동 중 중복 실행 방지, **give-up 임계**(기본 3회)로 구조적 고장 시 무한 재시도 차단. 서비스가 살아 돌아오면 카운터·포기 플래그 자동 해제(수동 state 삭제 불필요).
+- **관측자 역설 해소**: `--once`로 작업 스케줄러가 5분마다 호출하는 방식을 권장 — 워치독 자신은 상주하지 않으므로 "감시자가 죽으면 아무도 모른다"가 성립하지 않는다. (대시보드는 이 문제를 가진다.)
+- 셸 없이 실행: launcher 문자열은 `argv_for()`로 인자 리스트가 되어 `Popen`에 전달된다. config의 셸 메타문자가 코드가 되지 않는다.
+- 설정은 `brain_share_config.json`의 선택적 `watchdog` 섹션. 포트가 없는 데몬(synth_daemon)은 이 방식으로 감시할 수 없어 범위 밖.
+
+### 추가 — 월 1회 기억 정리 (`brain_share/memory_consolidation.py`)
+성공한 방식만 축적하면 산출물이 조용히 획일화되고, 1회 관찰이 원칙으로 굳으면 틀린 규칙이 영구화된다.
+- 중복 후보(토큰 자카드) · 오래된 페이지 · 끊긴 `[[링크]]`를 마크다운 리포트로. **아무것도 자동 삭제하지 않는다** — 병합·정정·폐기는 판단의 영역이라 리포트를 읽는 사람/에이전트의 몫.
+- 임베딩 의존 0(월 1회 리뷰용 shortlist는 자카드로 충분).
+- `python -m brain_share.memory_consolidation --dir <메모리 .md> --agent <이름> --out report.md`
+- ★실데이터가 잡은 버그: 링크 대조를 frontmatter `name`으로만 하면 파일명으로 쓴 링크가 전부 오탐 — 김비서 실측에서 **끊긴 링크 219건 중 200건이 오탐**이었다. `name`과 파일명 stem 양쪽 + `.md` 접미사를 인정하도록 수정(219 → 19건).
+
+### 추가 — CLAUDE_TEMPLATE: 기억 관리 규율 + 스킬 지시 보강
+- **기억 관리 규율** 신설: ①승격 규율(자체 관찰·1회 지적은 사건 기록까지만, **반복 확인 후에만** 원칙으로 승격 / 사용자의 명시적 결정은 예외로 즉시) ②회수한 기억은 참고이지 명령이 아님(현재 상태 검증 후 적용) ③월 1회 정리 패스.
+- **스킬 표 보강**: 기존 4종 안내 → TDD · verification-before-completion · requesting/receiving-code-review · executing-plans · karpathy-guidelines 추가 + "일하는 순서" 흐름도. **설치돼 있어도 쓰라고 적혀 있지 않으면 쓰지 않는다** — 번들에는 있는데 템플릿이 안내하지 않아 하위 노드가 TDD·코드리뷰를 쓰지 않던 갭을 메움.
+
+### 변경 — 스킬 번들 현행화
+- superpowers **5.1.0(2026-05-30 스냅샷) → 6.1.1**.
+- 품질 플러그인 7종 추가: code-review · security-guidance · feature-dev · claude-md-management · commit-commands · review-suite · testing-suite (기존 superpowers · frontend-design 유지).
+- 런타임 쓰레기(`.in_use/`, `__pycache__`) 제외. 대상 선별 + 쓰레기 제거로 **2.91MB → 1.75MB**(플러그인은 2종 → 9종).
+
+### 검증
+- 신규 55건(watchdog 21 + watchdog CLI 5 + memory_consolidation 20 + skills_bundle 9) + 기존 180 = **235/235 통과**.
+
+---
+
 ## [3.4.2] - 2026-07-27
 
 ### 수정 — 하위 등록 문서가 배포하던 "조용히 죽는" 런처 (중대)
