@@ -339,6 +339,41 @@ Startup 등록(선택):
 python autostart.py register BrainKitDashboard 'wscript C:/brainkit/start_dashboard.vbs'
 ```
 
+## 9. 원격 관리 데스크로 상태 보고 (Unreleased)
+
+원격 관리 화면(예: `mok.ai.kr/desk`)이 허브에 **접속하지 않는다.** 허브가 민감정보를 걸러낸 상태 요약을 주기적으로 **밀어 보낸다** — leaf→메인 업로드와 같은 방향이라 인바운드 포트를 열 필요가 없다.
+
+`brain_share_config.json`에 `desk` 섹션 추가:
+
+```json
+"desk": {
+  "url": "https://mok.ai.kr/api/hub-report",
+  "key": "<데스크 전용 비밀키 — read_key와 달라야 함>",
+  "hub_id": "main"
+}
+```
+
+```bash
+# 보낼 내용 미리보기 (전송 안 함)
+python -m brain_share.desk_reporter --root C:/brainkit/memory --dry-run
+# 1회 전송 — 작업 스케줄러에서 5분마다 (워치독과 같은 방식, 상주 프로세스 없음)
+python -m brain_share.desk_reporter --root C:/brainkit/memory --once
+```
+
+- **보내는 것**: 대시보드 5종 집계 + 워치독 요약(서비스별 실패 횟수, 포기한 서비스 `needs_human`). 로컬 경로(`root`)는 제거, 관계그래프 top 노드·정본화 토픽 이름 중 `blocked_divisions`/`blocked_tag_patterns`/`blocked_keyword_patterns`에 걸리는 것은 제거. 개수는 유지.
+- **인증**: `HMAC-SHA256(key, "<unix ts>.<body>")`를 `X-Brain-Desk-Signature` 헤더로. 키 자체는 전송되지 않는다. `read_key` 재사용은 거부(하나가 새도 다른 문이 열리지 않게). URL은 https만 허용(루프백 테스트 제외).
+- **결과 기록**: `<ROOT>/desk_reporter_state.json`(마지막 성공 시각·연속 실패 수), `<ROOT>/desk_reporter.log`. 실패 시 종료코드 1.
+
+**데스크(수신) 쪽 계약** — `POST` JSON, 스키마 `brainkit.desk.v1`:
+
+| 헤더 | 내용 |
+|---|---|
+| `X-Brain-Desk-Hub` | hub_id |
+| `X-Brain-Desk-Timestamp` | 전송 시각(unix 초) |
+| `X-Brain-Desk-Signature` | 위 HMAC hex |
+
+수신 측은 `brain_share.desk_reporter.verify()`와 같은 규칙으로 서명을 확인하고 타임스탬프가 ±300초를 벗어나면 거부한다(재전송 공격 차단). 성공 시 200. **마지막 보고가 15분 넘게 없으면 "허브 연락 끊김"으로 표시**한다 — 허브 PC가 꺼진 경우까지 이것 하나로 잡힌다.
+
 ---
 
 *Mokai Brain Kit 3.5.0 — agent brain_share upgrade package*
