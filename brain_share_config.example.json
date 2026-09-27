@@ -15,6 +15,13 @@
     "hub_id": "main"
   },
 
+  "_board_comment": "Optional. Enables the task board at http://127.0.0.1:9213/board. key is the owner's (can approve) and must differ from read_key and desk.key (or set $BRAIN_BOARD_KEY). export_vault_dir: approved tasks are written there as wiki pages.",
+  "board": {
+    "key": "CHANGE-ME-BOARD-OWNER-SECRET",
+    "owner": "대표",
+    "export_vault_dir": "C:/main_ai/obsidian"
+  },
+
   "_watchdog_comment": "Optional. Guards port-backed daemons. Run `python brain_watchdog.py --root <ROOT> --once` from Task Scheduler every ~5 min. Omit this section on a LEAF (no daemons to guard). launcher may also be an argument list.",
   "watchdog": {
     "max_failures": 3,

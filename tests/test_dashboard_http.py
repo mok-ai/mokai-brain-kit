@@ -79,3 +79,24 @@ def test_html_page_declares_utf8_charset(tmp_path):
     _, body = _parse_http(raw)
     text = body.decode("utf-8", errors="replace")
     assert "utf-8" in text.lower()
+
+
+def test_board_page_is_served_and_pages_link_each_other(tmp_path):
+    from brain_dashboard import make_handler
+    h = make_handler(tmp_path, ports=[])
+    status, body = _parse_http(_get(h, "/board"))
+    assert "200 OK" in status
+    board = body.decode("utf-8")
+    assert 'href="/"' in board and "/api/tasks" in board
+    _, body = _parse_http(_get(h, "/"))
+    assert 'href="/board"' in body.decode("utf-8")
+
+
+def test_board_api_is_off_without_key_and_creates_no_db(tmp_path, monkeypatch):
+    from brain_dashboard import make_handler
+    monkeypatch.delenv("BRAIN_BOARD_KEY", raising=False)
+    h = make_handler(tmp_path, ports=[])
+    status, body = _parse_http(_get(h, "/api/tasks"))
+    assert "503" in status
+    assert "보드 키" in json.loads(body.decode("utf-8"))["error"]
+    assert not (tmp_path / "task_board.db").exists()

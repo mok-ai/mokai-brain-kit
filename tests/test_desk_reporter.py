@@ -288,3 +288,27 @@ def test_cli_dry_run_prints_without_sending(tmp_path, capsys):
     assert main(["--root", str(tmp_path), "--dry-run"], post=post) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["schema"] == "brainkit.desk.v1"
+
+
+# ───────────────────────────── task board ────────────────────────────
+
+def test_snapshot_board_is_null_without_board(tmp_path):
+    snap = build_snapshot(tmp_path, cfg(), ports=[])
+    assert snap["board"] is None
+    assert not (tmp_path / "task_board.db").exists()
+
+
+def test_snapshot_board_sends_counts_never_titles(tmp_path):
+    from brain_share.task_board import TaskBoard
+    b = TaskBoard(tmp_path / "task_board.db")
+    t = b.create("극비 인수합병 검토", requester="대표",
+                 description="상대방 회사명", due="2000-01-01")
+    b.claim(t["id"], agent="a")
+    b.report(t["id"], agent="a", summary="요약 본문")
+    b.close()
+    snap = build_snapshot(tmp_path, cfg(), ports=[])
+    assert snap["board"]["awaiting_approval"] == 1
+    assert snap["board"]["overdue"] == 1
+    dumped = json.dumps(snap, ensure_ascii=False)
+    for secret in ("극비", "상대방", "요약 본문"):
+        assert secret not in dumped
