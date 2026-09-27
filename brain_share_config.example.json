@@ -8,6 +8,13 @@
   "blocked_keyword_patterns": ["api_key", "secret", "비밀번호", "인증서", "token", "passwd"],
   "allowed_collections": ["wiki", "knowledge", "decisions", "conversations", "tasks"],
 
+  "_desk_comment": "Optional. Push a redacted status snapshot to a remote admin desk. key must differ from read_key (or set $BRAIN_DESK_KEY). Run `python -m brain_share.desk_reporter --root <ROOT> --once` from Task Scheduler every ~5 min.",
+  "desk": {
+    "url": "https://mok.ai.kr/api/hub-report",
+    "key": "CHANGE-ME-DESK-ONLY-SECRET",
+    "hub_id": "main"
+  },
+
   "_watchdog_comment": "Optional. Guards port-backed daemons. Run `python brain_watchdog.py --root <ROOT> --once` from Task Scheduler every ~5 min. Omit this section on a LEAF (no daemons to guard). launcher may also be an argument list.",
   "watchdog": {
     "max_failures": 3,
