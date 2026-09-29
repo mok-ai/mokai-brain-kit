@@ -13,6 +13,8 @@ What leaves the machine
   they reveal size, not content.
 * A watchdog summary (per-service failures / given-up) from
   watchdog_state.json, so the desk can flag "needs a human".
+* Task board counts (per status, awaiting approval, blocked, overdue) from
+  task_board.db — numbers only, never titles or text. `null` if no board.
 
 Auth
 ----
@@ -53,6 +55,7 @@ from urllib.parse import urlparse
 from brain_share.config import BrainShareConfig, load_config
 from brain_share.dashboard_scanner import collect_all
 from brain_share.graph_gateway import is_blocked_node
+from brain_share.task_board import read_summary
 from brain_share.watchdog import load_state, save_state
 
 SCHEMA = "brainkit.desk.v1"
@@ -150,6 +153,7 @@ def build_snapshot(root, config: BrainShareConfig, *, hub_id: str = "main",
         "sent_at": _iso(now),
         "status": redact_status(collect_all(root, ports=ports), config),
         "watchdog": summarize_watchdog(load_state(root / "watchdog_state.json")),
+        "board": read_summary(root / "task_board.db"),
     }
 
 

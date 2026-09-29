@@ -360,7 +360,7 @@ python -m brain_share.desk_reporter --root C:/brainkit/memory --dry-run
 python -m brain_share.desk_reporter --root C:/brainkit/memory --once
 ```
 
-- **보내는 것**: 대시보드 5종 집계 + 워치독 요약(서비스별 실패 횟수, 포기한 서비스 `needs_human`). 로컬 경로(`root`)는 제거, 관계그래프 top 노드·정본화 토픽 이름 중 `blocked_divisions`/`blocked_tag_patterns`/`blocked_keyword_patterns`에 걸리는 것은 제거. 개수는 유지.
+- **보내는 것**: 대시보드 5종 집계 + 워치독 요약(서비스별 실패 횟수, 포기한 서비스 `needs_human`) + 업무 보드 **개수만**(상태별·승인 대기·막힘·기한 지남, 제목·내용은 절대 안 보냄). 로컬 경로(`root`)는 제거, 관계그래프 top 노드·정본화 토픽 이름 중 `blocked_divisions`/`blocked_tag_patterns`/`blocked_keyword_patterns`에 걸리는 것은 제거. 개수는 유지.
 - **인증**: `HMAC-SHA256(key, "<unix ts>.<body>")`를 `X-Brain-Desk-Signature` 헤더로. 키 자체는 전송되지 않는다. `read_key` 재사용은 거부(하나가 새도 다른 문이 열리지 않게). URL은 https만 허용(루프백 테스트 제외).
 - **결과 기록**: `<ROOT>/desk_reporter_state.json`(마지막 성공 시각·연속 실패 수), `<ROOT>/desk_reporter.log`. 실패 시 종료코드 1.
 
@@ -373,6 +373,36 @@ python -m brain_share.desk_reporter --root C:/brainkit/memory --once
 | `X-Brain-Desk-Signature` | 위 HMAC hex |
 
 수신 측은 `brain_share.desk_reporter.verify()`와 같은 규칙으로 서명을 확인하고 타임스탬프가 ±300초를 벗어나면 거부한다(재전송 공격 차단). 성공 시 200. **마지막 보고가 15분 넘게 없으면 "허브 연락 끊김"으로 표시**한다 — 허브 PC가 꺼진 경우까지 이것 하나로 잡힌다.
+
+## 10. 업무 협업 보드 (Unreleased)
+
+대표 ↔ 에이전트(김비서·leaf) 업무 흐름. 대표는 대시보드의 **업무 보드** 화면에서, 에이전트는 기존 **MCP 게이트웨이** 도구로 참여한다. 데이터는 `<ROOT>/task_board.db` 하나.
+
+```
+요청(대기) → 착수(진행) → 보고(승인 대기) → 승인(완료)
+                 ↕ 막힘/해제            ↘ 반려(사유 필수) → 진행
+```
+
+**켜기** — `brain_share_config.json`에 보드 키 추가 후 대시보드 재시작:
+
+```json
+"board": {
+  "key": "<대표 전용 비밀키 — read_key·desk 키와 달라야 함>",
+  "owner": "대표",
+  "export_vault_dir": "C:/main_ai/obsidian"
+}
+```
+
+`http://127.0.0.1:9213/board` → 보드 키 입력(이 탭에만 보관). 키가 없거나 read_key/desk 키와 같으면 보드는 꺼지고 화면에 이유가 표시된다.
+
+**대표(보드 화면)**: 새 업무 요청(제목·설명·담당자·우선순위·기한·부서·공개 범위) · 담당 지정 · 코멘트 · 막힘/해제 · **승인/반려**. 칩 필터 `내 승인 대기`/`막힘`/`기한 지남`. 승인하면 `export_vault_dir`이 있을 때 위키 페이지(`<부서>/task_00001.md`)로 자동 저장.
+
+**에이전트(MCP 게이트웨이, `X-Brain-Key`)**: `task_list` · `task_get` · `task_create` · `task_claim` · `task_report` · `task_comment` · `task_block`.
+- 승인·반려·담당 지정 도구는 **없다** — 에이전트는 자기 일을 스스로 승인할 수 없다.
+- 기밀(`confidential`) 업무와 `blocked_divisions` 부서 업무는 에이전트에게 보이지 않는다.
+- `agent` 이름은 자기 신고(모든 leaf가 read_key 공유)이므로 보드 소유자 이름(`owner`)은 쓸 수 없다.
+
+**보안**: 모든 `/api/tasks` 요청에 `X-Brain-Board-Key` 필요. 커스텀 헤더라 다른 웹사이트가 대표 브라우저를 통해 보드를 조작할 수 없다(CORS preflight 미응답). 모든 변경은 이력(`events`)에 남고 덮어쓰지 않는다.
 
 ---
 
